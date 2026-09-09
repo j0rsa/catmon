@@ -98,6 +98,40 @@ export const PWA_NARROW_VIEWPORT = {
   type: 'mobile' as const,
 };
 
+type StorybookViewport = {
+  name: string;
+  styles: { width: string; height: string };
+  type: 'desktop' | 'mobile' | 'tablet' | 'other';
+};
+
+function storybookViewport(
+  name: string,
+  width: number,
+  height: number,
+  type: StorybookViewport['type'],
+): StorybookViewport {
+  return { name, styles: { width: `${width}px`, height: `${height}px` }, type };
+}
+
+/**
+ * Storybook toolbar presets. Keys match CLAUDE.md target devices, plus the
+ * 360×700 floor (`pwaNarrow`) and a few aliases still referenced by stories.
+ */
+export const STORYBOOK_VIEWPORTS = {
+  pwaNarrow: PWA_NARROW_VIEWPORT,
+  pwaSmall: storybookViewport('PWA Small (375×667)', 375, 667, 'mobile'),
+  pwaMobile: storybookViewport('PWA Mobile (390×844)', 390, 844, 'mobile'),
+  galaxyZFlip4: storybookViewport('Galaxy Z Flip 4 (393×960)', 393, 960, 'mobile'),
+  galaxyZFlip4Landscape: storybookViewport('Galaxy Z Flip 4 landscape (960×393)', 960, 393, 'mobile'),
+  iphone16Pro: storybookViewport('iPhone 16 Pro (402×874)', 402, 874, 'mobile'),
+  iphone16ProLandscape: storybookViewport('iPhone 16 Pro landscape (874×402)', 874, 402, 'mobile'),
+  iphone15ProMax: storybookViewport('iPhone 15 Pro Max (430×932)', 430, 932, 'mobile'),
+  iphone15ProMaxLandscape: storybookViewport('iPhone 15 Pro Max landscape (932×430)', 932, 430, 'mobile'),
+  ipadMini: storybookViewport('iPad Mini (768×1024)', 768, 1024, 'tablet'),
+  desktopNarrow: storybookViewport('Narrow desktop (800)', 800, 900, 'desktop'),
+  desktop: storybookViewport('Desktop (1400)', 1400, 900, 'desktop'),
+} as const satisfies Record<string, StorybookViewport>;
+
 export const withNarrowFrame: Decorator = (Story) => (
   <div
     data-testid="narrow-frame"

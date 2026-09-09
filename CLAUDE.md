@@ -36,7 +36,7 @@ Known pet-setting keys: `med_nudge` (medication nudge schedule — morning/midda
 
 Adding a new pet-setting key: add the constant + types to `src/domain/pet_settings.rs`, add a match arm in `src/api/pet_settings.rs`, extend `PetSettingsKey` and `PetSettingsMap` in `frontend/src/api/petSettings.ts`.
 
-**Feeding reminders** live on each `nutrition_schedules` row (`notify`), not `pet_settings`. Toggle is on Nutrition → Feeding, per schedule. Window `from`/`to` floor to 10-minute steps (UI floors on blur; the API floors on save) so a late time never wraps into the next day. A worker runs every 10 minutes; if a window start has passed and today's intake is still below the cumulative amount due at that time, it sends in-app + push to every subscriber: `Time to give some {food|liquid} to {pet}.` Deduped per schedule + date + window `from`.
+**Feeding reminders** live on each `nutrition_schedules` row (`notify`), not `pet_settings`. Toggle is on Nutrition → Feeding, per schedule. Window `from`/`to` floor to 10-minute steps (UI floors on blur; the API floors on save) so a late time never wraps into the next day. A worker runs every 10 minutes; if a window start has passed and today's intake is still below the cumulative amount due at that time, it sends in-app + push to every subscriber: `Time to give some {food|liquid} to {pet}.` Deduped per schedule + date + window `from`. Liquid schedules compare **total known fluid** (direct liquids + wet-food moisture at 0.77), the same metric as the cumulative chart's `total` series — not `direct_liquid_ml` alone. Food schedules compare grams (`wet_food_g + dry_food_g`).
 
 Push subscriptions remain per browser endpoint; notification read state and push ownership follow `reader_key`.
 
@@ -76,7 +76,7 @@ Hard-won rules for **v2.3.0** (also in the source header):
 ### Touching frontend (`frontend/src/`)
 1. **Storybook** — update existing stories or add new ones for the changed component/page; ensure mock fixtures cover the new states.
 2. **Tests** — update Vitest unit tests if any exist for the changed module.
-3. **Desktop + mobile** — every Storybook `play` function must also run at **360×700** (`asNarrowStory` from `frontend/src/stories/viewport.ts`). That size is the required floor, not an optional extra. The narrow twin must keep the same interactions and assert the UI still fits (`assertFitsNarrowViewport`).
+3. **Desktop + mobile** — every Storybook `play` function must also run at **360×700** (`asNarrowStory` from `frontend/src/stories/viewport.ts`). That size is the required floor, not an optional extra. The narrow twin must keep the same interactions and assert the UI still fits (`assertFitsNarrowViewport`). Journal calendar stories also run at **320×720** (`asFoldCoverStory`) for the Galaxy Z Fold cover.
 4. **CLAUDE.md** — if the change establishes a new UI convention or naming pattern, add it here.
 
 ### PWA chrome: safe areas and the demo banner
@@ -171,6 +171,8 @@ These are the primary client devices to check for usability. All UI work must be
 | **Samsung Galaxy Z Flip 4** | Main (6.7" unfolded) | Portrait | 393 × 960 px ¹ | 2.75 | Punch-hole camera top; use `env(safe-area-inset-*)` |
 | Samsung Galaxy Z Flip 4 | Main (6.7" unfolded) | Landscape | 960 × 393 px ¹ | 2.75 | — |
 | Samsung Galaxy Z Flip 4 | Cover (1.9" external) | Portrait | ~130 × 65 px ² | ~4 | Web browsers do not run on the cover screen |
+| **Samsung Galaxy Z Fold 4** | Cover (6.2") | Portrait | 344 × 882 px ³ | 2.625 | Punch-hole camera top; browsers **do** run on this cover |
+| Samsung Galaxy Z Fold 4 | Cover (6.2") | Landscape | 882 × 344 px ³ | 2.625 | — |
 | **iPhone 16 Pro** | 6.3" Super Retina XDR | Portrait | 402 × 874 px | 3 | Dynamic Island top ≈ 59 pt; home indicator ≈ 34 pt |
 | iPhone 16 Pro | 6.3" Super Retina XDR | Landscape | 874 × 402 px | 3 | Side safe areas apply |
 | **iPhone 15 Pro Max** | 6.7" Super Retina XDR | Portrait | 430 × 932 px | 3 | Dynamic Island top ≈ 59 pt; home indicator ≈ 34 pt |
@@ -180,7 +182,9 @@ These are the primary client devices to check for usability. All UI work must be
 
 ¹ Galaxy Z Flip 4 main screen physical resolution is **1080 × 2640 px** @ 425 ppi. Chrome on Android reports DPR ≈ 2.75, yielding a CSS viewport of ~393 × 960 px in portrait. Some profiling tools report DPR 3 (→ 360 × 880 px); treat 360 px as the safe minimum width for this device. The exact reported value can differ between Chrome and Samsung Internet.
 
-² The cover/external screen (1.9", 512 × 260 physical px) is used exclusively for Samsung's Flex Window widgets — standard web browsers do not render on it. No web viewport testing is required for the cover screen.
+² The Flip cover/external screen (1.9", 512 × 260 physical px) is used exclusively for Samsung's Flex Window widgets — standard web browsers do not render on it. No web viewport testing is required for the Flip cover.
+
+³ Galaxy Z Fold 4 cover physical resolution is **904 × 2316 px**. Chrome reports DPR ≈ 2.625, yielding ~344 × 882 px. Some browsers report ~320 px wide — treat **320 px** as the floor for this cover (`galaxyZFoldCover` / `asFoldCoverStory`). The inner unfolded screen is a wide tablet layout, not this constraint.
 
 Safe area insets on iOS should always be handled via CSS `env(safe-area-inset-top/right/bottom/left)` — never hardcoded. The `withDeviceInsets()` Storybook decorator simulates these values in tests. Top insets for Dynamic Island models are approximately **59 pt** (status bar + island) and the home indicator bottom reserve is **34 pt**.
 

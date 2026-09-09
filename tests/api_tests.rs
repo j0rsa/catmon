@@ -5217,3 +5217,71 @@ async fn feeding_nudge_food_schedule_uses_food_wording() {
         Some("Time to give some food to FoodNudge.")
     );
 }
+
+/// Wet-food moisture counts toward a liquid schedule, matching the chart total.
+/// Direct liquid of 120 ml is behind a 190 ml due, but 100 g wet food adds 77 ml.
+#[actix_web::test]
+async fn feeding_nudge_liquid_counts_wet_food_fluid() {
+    use chrono::TimeZone;
+
+    let (app, state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "FoodFluidNudge");
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/nutrition/schedules")
+        .set_json(serde_json::json!({
+            "pet_id": pet_id,
+            "name": "Hydration",
+            "notify": true,
+            "rules": {
+                "type": "liquid",
+                "windows": [
+                    { "from": "08:00", "to": "09:00", "min": 100, "max": 190 }
+                ]
+            }
+        }))
+        .to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), 201);
+
+    for record in [
+        serde_json::json!({
+            "pet_id": pet_id,
+            "category": "liquids",
+            "amount": 120,
+            "unit": "ml",
+            "occurred_at": "2026-07-18T07:30:00",
+            "local_date": "2026-07-18"
+        }),
+        serde_json::json!({
+            "pet_id": pet_id,
+            "category": "wet_food",
+            "amount": 100,
+            "unit": "g",
+            "occurred_at": "2026-07-18T07:45:00",
+            "local_date": "2026-07-18"
+        }),
+    ] {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/nutrition/records")
+            .set_json(record)
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), 201);
+    }
+
+    let at_window = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 8, 0, 0)
+        .unwrap();
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_window)
+        .await
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications?unread_only=true")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let notes: serde_json::Value = test::read_body_json(resp).await;
+    assert!(
+        notes.as_array().unwrap().is_empty(),
+        "100 g wet food (77 ml) plus 120 ml liquid is 197 ml total, ahead of 190"
+    );
+}

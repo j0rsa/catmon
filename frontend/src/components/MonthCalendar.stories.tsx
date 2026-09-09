@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { mockCalendarHighlights, mockNutritionCalendarSettings } from '../stories/fixtures';
-import { asNarrowStory } from '../stories/viewport';
+import { asFoldCoverStory, asNarrowStory, assertPopoverFitsFrame } from '../stories/viewport';
 import type { DayNutritionHighlight } from '../types/pillars';
 import { MonthCalendar } from './MonthCalendar';
 
@@ -30,9 +30,21 @@ function assertHintsStayInCells(canvasElement: HTMLElement) {
     for (const hint of hints) {
       const box = hint.getBoundingClientRect();
       expect(box.right, 'metric text should stay inside the day cell').toBeLessThanOrEqual(cellBox.right + 1);
+      expect(hint.scrollWidth, 'metric text should not ellipsize').toBeLessThanOrEqual(hint.clientWidth + 1);
       expect(hint.textContent, 'compact metrics should not join with middots').not.toContain('·');
     }
   }
+}
+
+function assertMonthClearsSettingsGear(canvasElement: HTMLElement) {
+  const month = canvasElement.querySelector<HTMLElement>('.calendar-title h3');
+  const gear = canvasElement.querySelector<HTMLElement>('.widget-settings-gear-btn');
+  expect(month, 'month heading').toBeTruthy();
+  expect(gear, 'settings gear').toBeTruthy();
+  expect(
+    Math.round(month!.getBoundingClientRect().right),
+    'month heading should not overlap the settings gear',
+  ).toBeLessThanOrEqual(Math.round(gear!.getBoundingClientRect().left) + 1);
 }
 
 const meta = {
@@ -88,10 +100,12 @@ export const CompactMobile: Story = {
   },
   play: async ({ canvasElement }) => {
     assertHintsStayInCells(canvasElement);
+    assertMonthClearsSettingsGear(canvasElement);
   },
 };
 
 export const CompactMobileNarrow = asNarrowStory(CompactMobile);
+export const CompactMobileFoldCover = asFoldCoverStory(CompactMobile);
 
 /** Longest English month name — must shorten on a 360px journal header. */
 export const LongMonthName: Story = {
@@ -111,6 +125,14 @@ export const LongMonthNameNarrow = asNarrowStory({
   ...LongMonthName,
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('.calendar-month--short')).toBeVisible();
+    assertMonthClearsSettingsGear(canvasElement);
+  },
+});
+export const LongMonthNameFoldCover = asFoldCoverStory({
+  ...LongMonthName,
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('.calendar-month--short')).toBeVisible();
+    assertMonthClearsSettingsGear(canvasElement);
   },
 });
 
@@ -122,7 +144,9 @@ export const SettingsLegend: Story = {
     await expect(within(dialog).getByText('Colors match the numbers in each day cell.')).toBeInTheDocument();
     await expect(within(dialog).getByText('~ml')).toBeInTheDocument();
     await expect(within(dialog).getByRole('checkbox', { name: 'Wet food (g)' })).toBeChecked();
+    assertPopoverFitsFrame(canvasElement, dialog);
   },
 };
 
 export const SettingsLegendNarrow = asNarrowStory(SettingsLegend);
+export const SettingsLegendFoldCover = asFoldCoverStory(SettingsLegend);

@@ -98,6 +98,9 @@ export const PWA_NARROW_VIEWPORT = {
   type: 'mobile' as const,
 };
 
+/** Galaxy Z Fold cover (portrait). Chrome CSS width is ~320–344px. */
+export const FOLD_COVER_VIEWPORT = { width: 320, height: 720 } as const;
+
 type StorybookViewport = {
   name: string;
   styles: { width: string; height: string };
@@ -123,6 +126,7 @@ export const STORYBOOK_VIEWPORTS = {
   pwaMobile: storybookViewport('PWA Mobile (390×844)', 390, 844, 'mobile'),
   galaxyZFlip4: storybookViewport('Galaxy Z Flip 4 (393×960)', 393, 960, 'mobile'),
   galaxyZFlip4Landscape: storybookViewport('Galaxy Z Flip 4 landscape (960×393)', 960, 393, 'mobile'),
+  galaxyZFoldCover: storybookViewport('Galaxy Z Fold cover (320×720)', 320, 720, 'mobile'),
   iphone16Pro: storybookViewport('iPhone 16 Pro (402×874)', 402, 874, 'mobile'),
   iphone16ProLandscape: storybookViewport('iPhone 16 Pro landscape (874×402)', 874, 402, 'mobile'),
   iphone15ProMax: storybookViewport('iPhone 15 Pro Max (430×932)', 430, 932, 'mobile'),
@@ -146,6 +150,20 @@ export const withNarrowFrame: Decorator = (Story) => (
   </div>
 );
 
+export const withFoldCoverFrame: Decorator = (Story) => (
+  <div
+    data-testid="narrow-frame"
+    style={{
+      width: FOLD_COVER_VIEWPORT.width,
+      maxWidth: FOLD_COVER_VIEWPORT.width,
+      minHeight: FOLD_COVER_VIEWPORT.height,
+      boxSizing: 'border-box',
+    }}
+  >
+    <Story />
+  </div>
+);
+
 export function assertFitsNarrowViewport(canvasElement: HTMLElement) {
   const frame =
     canvasElement.closest('[data-testid="narrow-frame"]')
@@ -155,6 +173,18 @@ export function assertFitsNarrowViewport(canvasElement: HTMLElement) {
     frame.scrollWidth,
     `UI overflows ${NARROW_VIEWPORT.width}px horizontally (${frame.scrollWidth}px)`,
   ).toBeLessThanOrEqual(frame.clientWidth + 1);
+}
+
+/** A popover must stay inside its story frame (or the canvas on desktop). */
+export function assertPopoverFitsFrame(canvasElement: HTMLElement, dialog: HTMLElement) {
+  const frame =
+    canvasElement.closest('[data-testid="narrow-frame"]')
+    ?? canvasElement.querySelector('[data-testid="narrow-frame"]')
+    ?? canvasElement;
+  const frameBox = frame.getBoundingClientRect();
+  const box = dialog.getBoundingClientRect();
+  expect(box.left, 'popover overflows the left edge').toBeGreaterThanOrEqual(frameBox.left - 1);
+  expect(box.right, 'popover overflows the right edge').toBeLessThanOrEqual(frameBox.right + 1);
 }
 
 function isNarrowCanvas(canvasElement: HTMLElement): boolean {
@@ -260,6 +290,26 @@ export function asNarrowStory<TArgs>(story: StoryObj<TArgs>): StoryObj<TArgs> {
       },
     },
     decorators: [...decoratorList(story), withNarrowFrame],
+    play: async (context: { canvasElement: HTMLElement }) => {
+      if (play) await (play as (ctx: { canvasElement: HTMLElement }) => unknown)(context);
+      assertFitsNarrowViewport(context.canvasElement);
+    },
+  };
+}
+
+/** Same interaction coverage as `story`, constrained to a Fold cover (~320×720). */
+export function asFoldCoverStory<TArgs>(story: StoryObj<TArgs>): StoryObj<TArgs> {
+  const play = story.play;
+  return {
+    ...story,
+    parameters: {
+      ...story.parameters,
+      viewport: {
+        ...story.parameters?.viewport,
+        defaultViewport: 'galaxyZFoldCover',
+      },
+    },
+    decorators: [...decoratorList(story), withFoldCoverFrame],
     play: async (context: { canvasElement: HTMLElement }) => {
       if (play) await (play as (ctx: { canvasElement: HTMLElement }) => unknown)(context);
       assertFitsNarrowViewport(context.canvasElement);

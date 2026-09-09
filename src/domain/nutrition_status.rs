@@ -26,9 +26,14 @@ pub struct NutritionStatusIntake {
 }
 
 impl NutritionStatusIntake {
+    /// Intake compared against a schedule's due amount.
+    ///
+    /// Liquid reminders use `total_known_fluid_ml` (direct liquids + wet-food
+    /// moisture), matching the cumulative fluid chart's **total** series. Food
+    /// reminders stay in grams.
     pub fn amount_for(&self, kind: ScheduleKind) -> f64 {
         match kind {
-            ScheduleKind::Liquid => self.direct_liquid_ml,
+            ScheduleKind::Liquid => self.total_known_fluid_ml,
             ScheduleKind::Food => self.wet_food_g + self.dry_food_g,
         }
     }
@@ -230,6 +235,26 @@ mod tests {
     fn parse_liquid_schedule_windows_ignores_food_schedules() {
         let rules = r#"{"type":"food","windows":[{"from":"08:00","to":"09:00","min":1,"max":2}]}"#;
         assert!(parse_liquid_schedule_windows(rules).is_empty());
+    }
+
+    #[test]
+    fn liquid_amount_for_matches_chart_total() {
+        let intake = NutritionStatusIntake {
+            liquids_ml: 100.0,
+            water_ml: 20.0,
+            direct_liquid_ml: 120.0,
+            wet_food_g: 100.0,
+            wet_food_fluid_ml: 77.0,
+            dry_food_g: 10.0,
+            total_known_fluid_ml: 197.0,
+        };
+        assert_eq!(intake.amount_for(ScheduleKind::Liquid), 197.0);
+        assert_eq!(intake.amount_for(ScheduleKind::Food), 110.0);
+        assert!(
+            intake.amount_for(ScheduleKind::Liquid) > 190.0,
+            "wet-food moisture must keep a 197 ml total ahead of a 190 ml due"
+        );
+        assert!(intake.direct_liquid_ml < 190.0);
     }
 
     #[test]

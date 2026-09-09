@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useUserWidgetSettings } from '../api/userSettings';
-import { calendarCells, localToday, shiftMonth } from '../lib/dates';
+import { calendarCells, formatMonthHeading, localToday, shiftMonth } from '../lib/dates';
 import { formatDayHint, formatDayHintCompact } from '../lib/nutritionMetrics';
 import { nutritionCalendarToDisplayConfig, weekStartFromSettings } from '../lib/widgetSettings';
 import type { DayNutritionHighlight } from '../types/pillars';
@@ -44,7 +44,8 @@ export function MonthCalendar({
   const weekdays = weekStart === 'monday' ? WEEKDAYS_MON : WEEKDAYS_SUN;
   const today = localToday();
   const isOnToday = selectedDate === today;
-  const displayMonth = new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const displayMonthLong = formatMonthHeading(month, 'long');
+  const displayMonthShort = formatMonthHeading(month, 'short');
 
   return (
     <section className={`panel calendar-panel${compact ? ' calendar-panel--compact' : ''}`}>
@@ -56,7 +57,10 @@ export function MonthCalendar({
         </button>
         <div className="calendar-title">
           <p className="eyebrow">Journal</p>
-          <h3>{displayMonth}</h3>
+          <h3>
+            <span className="calendar-month calendar-month--long">{displayMonthLong}</span>
+            <span className="calendar-month calendar-month--short">{displayMonthShort}</span>
+          </h3>
         </div>
         <div className="calendar-header-actions">
           {showSettings && (

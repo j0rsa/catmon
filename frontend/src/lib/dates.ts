@@ -32,6 +32,14 @@ export function monthKey(date: string) {
   return date.slice(0, 7);
 }
 
+/** Calendar heading: `September 2026` or short `Sep 2026` when the header is cramped. */
+export function formatMonthHeading(month: string, style: 'long' | 'short' = 'long') {
+  return new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, {
+    month: style,
+    year: 'numeric',
+  });
+}
+
 export function monthBounds(month: string) {
   const [year, monthIndex] = month.split('-').map(Number);
   const first = `${month}-01`;

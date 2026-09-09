@@ -72,13 +72,21 @@ interface WidgetSettingsCheckboxProps {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  children?: ReactNode;
+  className?: string;
 }
 
-export function WidgetSettingsCheckbox({ label, checked, onChange }: WidgetSettingsCheckboxProps) {
+export function WidgetSettingsCheckbox({
+  label,
+  checked,
+  onChange,
+  children,
+  className,
+}: WidgetSettingsCheckboxProps) {
   return (
-    <label className="checkbox-row widget-settings-checkbox">
+    <label className={`checkbox-row widget-settings-checkbox${className ? ` ${className}` : ''}`}>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
-      {label}
+      {children ?? label}
     </label>
   );
 }

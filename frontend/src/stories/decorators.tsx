@@ -418,6 +418,26 @@ export function withPetsPage(options?: { empty?: boolean }): Decorator {
   };
 }
 
+export function withSchedulesPage(options?: { empty?: boolean }): Decorator {
+  return function SchedulesPageDecorator(Story) {
+    const client = makeMockClient();
+    client.setQueryData(['pets'], mockPets);
+    client.setQueryData(['me'], { subject: 'dev', email: null, name: 'Dev', display_name: 'Dev', kind: 'dev', scopes: [] });
+    client.setQueryData(['app-info'], mockAppInfo);
+    client.setQueryData(['nutrition-schedules', mockPetId], options?.empty ? [] : mockNutritionSchedules);
+
+    return (
+      <MemoryRouter initialEntries={['/nutrition/schedules']}>
+        <QueryClientProvider client={client}>
+          <SelectedPetProvider initialPetId={mockPetId}>
+            <Story />
+          </SelectedPetProvider>
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+  };
+}
+
 // ── Health page decorator ────────────────────────────────────────────────────
 
 interface WithHealthPageOptions {

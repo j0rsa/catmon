@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub const KIND_ELIMINATION_AUTO_CATEGORIZE_FAILED: &str = "elimination.auto_categorize_failed";
+pub const KIND_FEEDING_NUDGE: &str = "nutrition.feeding_nudge";
+pub const SOURCE_KIND_FEEDING_NUDGE: &str = "feeding_nudge";
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Notification {

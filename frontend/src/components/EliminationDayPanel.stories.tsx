@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { mockPetId } from '../stories/fixtures';
 import { withEliminationDayPanel } from '../stories/decorators';
+import { asNarrowStory } from '../stories/viewport';
 import { EliminationDayPanel } from './EliminationDayPanel';
 
 const meta = {
@@ -19,6 +20,11 @@ type Story = StoryObj<typeof meta>;
 
 export const WithRecords: Story = {
   decorators: [withEliminationDayPanel('2024-06-15', mockPetId)],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByLabelText('Time')).toHaveValue('');
+    await expect(canvas.getByLabelText('Duration (mm:ss)')).toHaveValue('');
+  },
 };
 
 export const DeepLinkHighlight: Story = {
@@ -113,6 +119,78 @@ export const EmptyDay: Story = {
     date: '2024-06-16',
   },
   decorators: [withEliminationDayPanel('2024-06-16', mockPetId, true)],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const duration = canvas.getByLabelText('Duration (mm:ss)');
+    await expect(duration).toHaveValue('');
+    await userEvent.type(duration, '1:23');
+    await expect(duration).toHaveValue('1:23');
+    await userEvent.tab();
+    await expect(duration).toHaveValue('1:23');
+  },
+};
+
+/** Optional duration is typed as `mm:ss` (or `m.ss` on a decimal pad), not ATM digits. */
+export const LogVisitMmss: Story = {
+  args: {
+    date: '2024-06-16',
+  },
+  decorators: [withEliminationDayPanel('2024-06-16', mockPetId, true)],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const fetchMock = fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method ?? 'GET').toUpperCase();
+      if (method === 'POST' && url.includes('/elimination/records')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { duration_seconds?: number };
+        return new Response(
+          JSON.stringify({
+            id: 'elim-new',
+            pet_id: mockPetId,
+            occurred_at: '2024-06-16T12:00:00',
+            local_date: '2024-06-16',
+            event_type: 'urination',
+            subtype: null,
+            duration_seconds: body.duration_seconds ?? null,
+            note: null,
+            source_type: 'manual',
+            is_auto_categorized: false,
+            auto_categorize_confidence: null,
+            created_at: '2024-06-16T12:00:00',
+            updated_at: '2024-06-16T12:00:00',
+          }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.includes('/elimination/records')) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('null', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const originalFetch = window.fetch;
+    window.fetch = fetchMock as unknown as typeof fetch;
+
+    try {
+      await userEvent.type(canvas.getByLabelText('Duration (mm:ss)'), '1:23');
+      await userEvent.click(canvas.getByRole('button', { name: 'Log visit' }));
+      await waitFor(() => {
+        const posts = fetchMock.mock.calls.filter((call) => {
+          const method = String(call[1]?.method ?? 'GET').toUpperCase();
+          return method === 'POST' && String(call[0]).includes('/elimination/records');
+        });
+        expect(posts).toHaveLength(1);
+        expect(String(posts[0][1]?.body ?? '')).toContain('"duration_seconds":83');
+      });
+    } finally {
+      window.fetch = originalFetch;
+    }
+  },
 };
 
 const weeLatestRecords = [
@@ -153,19 +231,16 @@ export const Editing: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Edit' }));
     const logVisit = canvas.getByRole('button', { name: 'Editing…' });
     await expect(logVisit).toBeDisabled();
+    const editTime = canvas.getAllByLabelText('Time').find((el) => (el as HTMLInputElement).value === '20:00');
+    await expect(editTime).toBeTruthy();
+    await expect(editTime).toHaveClass('record-entry-time');
+    const editDuration = canvas.getAllByLabelText('Duration (mm:ss)').find((el) => !(el as HTMLInputElement).disabled);
+    await expect(editDuration).toHaveValue('0:45');
     const editTypeSelect = canvas
       .getAllByLabelText('Event type')
       .find((el) => !(el as HTMLSelectElement).disabled);
     await expect(editTypeSelect).toBeTruthy();
     await expect(canvas.queryByText('Last visit uncategorized — was it:')).not.toBeInTheDocument();
-  },
-};
-
-export const EditingNarrow: Story = {
-  ...Editing,
-  parameters: {
-    ...Editing.parameters,
-    viewport: { defaultViewport: 'mobile1' },
   },
 };
 
@@ -268,3 +343,13 @@ export const EditTypeDoesNotCreate: Story = {
     }
   },
 };
+
+export const WithRecordsNarrow = asNarrowStory(WithRecords);
+export const DeepLinkHighlightNarrow = asNarrowStory(DeepLinkHighlight);
+export const GeneralLatestRecordNarrow = asNarrowStory(GeneralLatestRecord);
+export const AutoCategorizedRecordNarrow = asNarrowStory(AutoCategorizedRecord);
+export const EmptyDayNarrow = asNarrowStory(EmptyDay);
+export const LogVisitMmssNarrow = asNarrowStory(LogVisitMmss);
+export const EditingNarrow = asNarrowStory(Editing);
+export const EditingHidesCategorizeBarNarrow = asNarrowStory(EditingHidesCategorizeBar);
+export const EditTypeDoesNotCreateNarrow = asNarrowStory(EditTypeDoesNotCreate);

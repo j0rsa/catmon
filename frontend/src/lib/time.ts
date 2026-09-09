@@ -19,3 +19,20 @@ export function isoFromDateAndTime(date: string, time: string): string {
 export function timeFromIso(iso: string): string {
   return iso.slice(11, 16);
 }
+
+/** Feeding windows and the reminder worker share this 10-minute grid. */
+export const FEEDING_TIME_STEP_MINUTES = 10;
+
+/** Floor `HH:MM` down to a `stepMinutes` boundary. `23:55` → `23:50`. */
+export function floorHhmmToStep(time: string, stepMinutes = FEEDING_TIME_STEP_MINUTES): string {
+  const match = /^(\d{1,2}):(\d{2})/.exec(time);
+  if (!match || stepMinutes <= 0) return time;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return time;
+  const total = hours * 60 + minutes;
+  const floored = Math.floor(total / stepMinutes) * stepMinutes;
+  const h = Math.floor(floored / 60);
+  const m = floored % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}

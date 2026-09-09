@@ -47,7 +47,7 @@ export function MonthCalendar({
   const displayMonth = new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
   return (
-    <section className="panel calendar-panel">
+    <section className={`panel calendar-panel${compact ? ' calendar-panel--compact' : ''}`}>
       <div className="calendar-header">
         <button className="button button-secondary button-compact calendar-nav-btn" type="button" onClick={() => onMonthChange(shiftMonth(month, -1))}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -99,21 +99,33 @@ export function MonthCalendar({
           const isToday = cell.date === localToday();
 
           let hasData: boolean;
-          let hintLines: string[];
+          let hintNodes: React.ReactNode;
           let hintExtra: React.ReactNode = null;
 
           if (renderDayHints) {
             const custom = renderDayHints(cell.date);
             hasData = custom.hasData;
-            hintLines = custom.lines;
             hintExtra = custom.extra ?? null;
+            hintNodes = custom.lines.length > 0
+              ? custom.lines.map((line) => <span key={line} className="calendar-hint">{line}</span>)
+              : <span className="calendar-hint muted-text">—</span>;
           } else {
             const highlight = highlights.get(cell.date);
-            const hint = compact
+            const hintLines = compact
               ? formatDayHintCompact(highlight, calendarConfig)
               : formatDayHint(highlight, calendarConfig);
-            hintLines = Array.isArray(hint) ? hint : hint ? [hint] : [];
             hasData = hintLines.length > 0;
+            hintNodes = hintLines.length > 0
+              ? hintLines.map((line) => (
+                  <span
+                    key={line.kind}
+                    className={`calendar-hint calendar-hint--${line.kind}`}
+                    title={line.title}
+                  >
+                    {line.text}
+                  </span>
+                ))
+              : <span className="calendar-hint muted-text">—</span>;
           }
 
           return (
@@ -124,10 +136,7 @@ export function MonthCalendar({
               onClick={() => onSelectDate(cell.date!)}
             >
               <span className="calendar-day">{cell.day}</span>
-              {hintLines.length > 0
-                ? hintLines.map((line) => <span key={line} className="calendar-hint">{line}</span>)
-                : <span className="calendar-hint muted-text">—</span>
-              }
+              {hintNodes}
               {hintExtra}
             </button>
           );

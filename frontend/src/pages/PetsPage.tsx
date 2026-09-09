@@ -91,10 +91,10 @@ export default function PetsPage() {
             <article key={pet.id} className="panel">
               <div className="pet-list-card-header">
                 <PetAvatar species={pet.species} name={pet.name} color={pet.color} photoUrl={getPetPhoto(pet.id)} size={72} />
-                <div>
-                  <div className="entry-card-header">
+                <div className="pet-list-card-identity">
+                  <div className="pet-list-card-title">
                     <h3>{pet.name}</h3>
-                    <div className="button-row">
+                    <div className="pet-list-card-badges">
                       <span className="status-pill">{PET_SPECIES_LABELS[pet.species]}</span>
                       <span className="status-pill">{PET_STATUS_LABELS[pet.status]}</span>
                     </div>

@@ -49,61 +49,69 @@ export interface CalendarDisplayConfig {
   calendar_show_total_fluid: boolean;
 }
 
+export type CalendarHintKind = 'fluid' | 'wet' | 'liquids' | 'water' | 'dry' | 'count';
+
+export interface CalendarHintLine {
+  kind: CalendarHintKind;
+  text: string;
+  /** Full label for tooltips when the compact cell truncates. */
+  title: string;
+}
+
 export function formatDayHint(
   highlight: DayNutritionHighlight | undefined,
   cfg?: CalendarDisplayConfig,
-): string | string[] {
-  if (!highlight || highlight.recordCount === 0) return '';
-  const parts: string[] = [];
+  compact = false,
+): CalendarHintLine[] {
+  if (!highlight || highlight.recordCount === 0) return [];
+  const parts: CalendarHintLine[] = [];
   if (cfg?.calendar_show_total_fluid ?? true) {
     const ml = totalKnownFluidMl(highlight);
-    if (ml > 0) parts.push(`~${ml}ml fluid`);
+    if (ml > 0) {
+      const title = `~${ml}ml fluid`;
+      parts.push({ kind: 'fluid', text: compact ? `~${ml}ml` : title, title });
+    }
   }
   if (cfg?.calendar_show_wet_food ?? true) {
-    if (highlight.wetFood > 0) parts.push(`${Math.round(highlight.wetFood)}g wet`);
+    if (highlight.wetFood > 0) {
+      const n = Math.round(highlight.wetFood);
+      const title = `${n}g wet`;
+      parts.push({ kind: 'wet', text: compact ? `${n}g` : title, title });
+    }
   }
   if (cfg?.calendar_show_liquids ?? true) {
-    if (highlight.liquids > 0) parts.push(`${Math.round(highlight.liquids)}ml liq`);
+    if (highlight.liquids > 0) {
+      const n = Math.round(highlight.liquids);
+      const title = `${n}ml liq`;
+      parts.push({ kind: 'liquids', text: compact ? `${n}ml` : title, title });
+    }
   }
   if (cfg?.calendar_show_water ?? true) {
-    if (highlight.water > 0) parts.push(`${Math.round(highlight.water)}ml water`);
+    if (highlight.water > 0) {
+      const n = Math.round(highlight.water);
+      const title = `${n}ml water`;
+      parts.push({ kind: 'water', text: compact ? `${n}ml` : title, title });
+    }
   }
   if (cfg?.calendar_show_dry_food ?? true) {
-    if (highlight.dryFood > 0) parts.push(`${Math.round(highlight.dryFood)}g dry`);
+    if (highlight.dryFood > 0) {
+      const n = Math.round(highlight.dryFood);
+      const title = `${n}g dry`;
+      parts.push({ kind: 'dry', text: compact ? `${n}g` : title, title });
+    }
   }
   if (parts.length === 0 && (cfg?.calendar_show_record_count ?? true)) {
-    return `${highlight.recordCount} log${highlight.recordCount === 1 ? '' : 's'}`;
+    const title = `${highlight.recordCount} log${highlight.recordCount === 1 ? '' : 's'}`;
+    parts.push({ kind: 'count', text: compact ? `${highlight.recordCount}×` : title, title });
   }
-  if (parts.length === 0) return '';
   return parts;
 }
 
 export function formatDayHintCompact(
   highlight: DayNutritionHighlight | undefined,
   cfg?: CalendarDisplayConfig,
-): string {
-  if (!highlight || highlight.recordCount === 0) return '';
-  const parts: string[] = [];
-  if (cfg?.calendar_show_total_fluid ?? true) {
-    const ml = totalKnownFluidMl(highlight);
-    if (ml > 0) parts.push(`~${ml}ml`);
-  }
-  if (cfg?.calendar_show_wet_food ?? true) {
-    if (highlight.wetFood > 0) parts.push(`${Math.round(highlight.wetFood)}g wet`);
-  }
-  if (cfg?.calendar_show_liquids ?? true) {
-    if (highlight.liquids > 0) parts.push(`${Math.round(highlight.liquids)}ml liq`);
-  }
-  if (cfg?.calendar_show_water ?? true) {
-    if (highlight.water > 0) parts.push(`${Math.round(highlight.water)}ml water`);
-  }
-  if (cfg?.calendar_show_dry_food ?? true) {
-    if (highlight.dryFood > 0) parts.push(`${Math.round(highlight.dryFood)}g dry`);
-  }
-  if (parts.length === 0 && (cfg?.calendar_show_record_count ?? true)) {
-    return `${highlight.recordCount}×`;
-  }
-  return parts.join(' · ');
+): CalendarHintLine[] {
+  return formatDayHint(highlight, cfg, true);
 }
 
 export type DayHint = ReturnType<typeof formatDayHint>;

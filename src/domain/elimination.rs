@@ -64,6 +64,7 @@ pub struct EliminationRecord {
 pub struct CreateEliminationRecord {
     pub pet_id: String,
     /// Naive local datetime YYYY-MM-DDTHH:MM:SS. Defaults to now in configured timezone.
+    /// Applied to both the elimination record and the weight record.
     pub occurred_at: Option<String>,
     pub local_date: Option<String>,
     pub event_type: EliminationEventType,

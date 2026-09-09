@@ -5,6 +5,7 @@ import { NoPetSelected } from '../components/NoPetSelected';
 import { useSelectedPet } from '../context/SelectedPetContext';
 import type { NutritionSchedule } from '../types';
 import { parseDecimal } from '../lib/numbers';
+import { floorHhmmToStep } from '../lib/time';
 import { usePermissions } from '../context/usePermissions';
 
 type ScheduleType = 'liquid' | 'food';
@@ -200,6 +201,13 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
     },
   });
 
+  const notifyMutation = useMutation({
+    mutationFn: (notify: boolean) => nutritionSchedulesApi.update(schedule.id, { notify }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['nutrition-schedules'] });
+    },
+  });
+
   function saveRules(updated: ScheduleRules) {
     saveMutation.mutate(updated);
   }
@@ -207,8 +215,8 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
   function addWindow() {
     if (!addRow.from || !addRow.to) return;
     const win: TimeWindow = {
-      from: addRow.from,
-      to: addRow.to,
+      from: floorHhmmToStep(addRow.from),
+      to: floorHhmmToStep(addRow.to),
       min: Number(addRow.min ?? 0),
       max: Number(addRow.max ?? 0),
       note: addRow.note ?? '',
@@ -228,7 +236,14 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
 
   function saveEdit() {
     if (editingIndex === null || !editRow) return;
-    saveRules({ ...rules, windows: rules.windows.map((w, i) => (i === editingIndex ? editRow : w)) });
+    saveRules({
+      ...rules,
+      windows: rules.windows.map((w, i) =>
+        i === editingIndex
+          ? { ...editRow, from: floorHhmmToStep(editRow.from), to: floorHhmmToStep(editRow.to) }
+          : w,
+      ),
+    });
     setEditingIndex(null);
     setEditRow(null);
   }
@@ -276,6 +291,23 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
         </div>
       </div>
 
+      <label className="schedule-notify" data-readonly={canWrite ? undefined : 'true'}>
+        <input
+          type="checkbox"
+          checked={schedule.notify}
+          disabled={!canWrite || notifyMutation.isPending}
+          aria-label="Feeding reminder"
+          onChange={(e) => notifyMutation.mutate(e.target.checked)}
+        />
+        <span className="schedule-notify-copy">
+          <strong>Feeding reminder</strong>
+          <span className="muted-text">
+            Notify everyone at each window start if intake is behind the scheduled amount.
+            The server checks every 10 minutes.
+          </span>
+        </span>
+      </label>
+
       {/* Windows table */}
       <div style={{ background: 'var(--surface-inset)', borderRadius: 16, border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
         <div style={{ padding: '0.75rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -291,9 +323,17 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
         {rules.windows.map((win, index) =>
           editingIndex === index && editRow ? (
             <div key={index} style={{ display: 'flex', gap: '0.5rem', padding: '0.6rem 1rem', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
-              <input type="time" aria-label="From" value={editRow.from} onChange={(e) => setEditRow({ ...editRow, from: e.target.value })} style={{ width: 120 }} />
+              <ScheduleTimeInput
+                aria-label="From"
+                value={editRow.from}
+                onChange={(from) => setEditRow({ ...editRow, from })}
+              />
               <span style={{ color: 'var(--text-subtle)' }}>–</span>
-              <input type="time" aria-label="To" value={editRow.to} onChange={(e) => setEditRow({ ...editRow, to: e.target.value })} style={{ width: 120 }} />
+              <ScheduleTimeInput
+                aria-label="To"
+                value={editRow.to}
+                onChange={(to) => setEditRow({ ...editRow, to })}
+              />
               <input type="text" inputMode="decimal" aria-label={`Minimum ${unit}`} placeholder={`min ${unit}`} value={editRow.min || ''} onChange={(e) => setEditRow({ ...editRow, min: parseDecimal(e.target.value) })} style={{ width: 90 }} />
               <input type="text" inputMode="decimal" aria-label={`Maximum ${unit}`} placeholder={`max ${unit}`} value={editRow.max || ''} onChange={(e) => setEditRow({ ...editRow, max: parseDecimal(e.target.value) })} style={{ width: 90 }} />
               <input aria-label="Note" placeholder="note" value={editRow.note} onChange={(e) => setEditRow({ ...editRow, note: e.target.value })} style={{ flex: 1, minWidth: 120 }} />
@@ -308,9 +348,17 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
         {/* Add row */}
         {canWrite && <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1rem', alignItems: 'center', borderTop: rules.windows.length > 0 ? '1px solid var(--border-subtle)' : undefined, flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginRight: '0.25rem' }}>add:</span>
-          <input type="time" aria-label="From" value={addRow.from ?? '08:00'} onChange={(e) => setAddRow({ ...addRow, from: e.target.value })} style={{ width: 120 }} />
+          <ScheduleTimeInput
+            aria-label="From"
+            value={addRow.from ?? '08:00'}
+            onChange={(from) => setAddRow({ ...addRow, from })}
+          />
           <span style={{ color: 'var(--text-subtle)' }}>–</span>
-          <input type="time" aria-label="To" value={addRow.to ?? '09:00'} onChange={(e) => setAddRow({ ...addRow, to: e.target.value })} style={{ width: 120 }} />
+          <ScheduleTimeInput
+            aria-label="To"
+            value={addRow.to ?? '09:00'}
+            onChange={(to) => setAddRow({ ...addRow, to })}
+          />
           <input type="text" inputMode="decimal" aria-label={`Minimum ${unit}`} placeholder={`min ${unit}`} value={addRow.min ?? ''} onChange={(e) => setAddRow({ ...addRow, min: parseDecimal(e.target.value) })} style={{ width: 90 }} />
           <input type="text" inputMode="decimal" aria-label={`Maximum ${unit}`} placeholder={`max ${unit}`} value={addRow.max ?? ''} onChange={(e) => setAddRow({ ...addRow, max: parseDecimal(e.target.value) })} style={{ width: 90 }} />
           <input aria-label="Note" placeholder="note (optional)" value={addRow.note ?? ''} onChange={(e) => setAddRow({ ...addRow, note: e.target.value })} style={{ flex: 1, minWidth: 160 }} />
@@ -320,6 +368,28 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
         </div>}
       </div>
     </div>
+  );
+}
+
+function ScheduleTimeInput({
+  value,
+  onChange,
+  'aria-label': ariaLabel,
+}: {
+  value: string;
+  onChange: (time: string) => void;
+  'aria-label': string;
+}) {
+  return (
+    <input
+      type="time"
+      step={60}
+      aria-label={ariaLabel}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={(e) => onChange(floorHhmmToStep(e.target.value))}
+      style={{ width: 120 }}
+    />
   );
 }
 

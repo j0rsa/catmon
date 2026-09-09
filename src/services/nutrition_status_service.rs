@@ -80,7 +80,7 @@ fn parse_ts(value: &str, timezone: Tz) -> AppResult<DateTime<Tz>> {
         .ok_or_else(|| AppError::BadRequest(format!("ambiguous local timestamp: {value}")))
 }
 
-fn accumulate_intake(
+pub(crate) fn accumulate_intake(
     records: &[crate::domain::nutrition_record::NutritionRecord],
     as_of: &str,
 ) -> NutritionStatusIntake {

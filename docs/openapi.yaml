@@ -3172,10 +3172,10 @@ components:
       properties:
         from:
           type: string
-          description: Window start time (HH:MM)
+          description: Window start time (HH:MM). Floored to a 10-minute step on save.
         to:
           type: string
-          description: Window end time (HH:MM)
+          description: Window end time (HH:MM). Floored to a 10-minute step on save.
         min:
           type: number
           format: double
@@ -3226,6 +3226,9 @@ components:
         active:
           type: boolean
           description: Whether the schedule is active
+        notify:
+          type: boolean
+          description: When true, send a feeding reminder at each window start if today's intake is behind the amount due. The worker checks every 10 minutes.
         rules_json:
           type: string
           description: JSON-serialized window-based schedule rules
@@ -3242,6 +3245,7 @@ components:
         - pet_id
         - name
         - active
+        - notify
         - rules_json
         - created_at
         - updated_at
@@ -3260,6 +3264,10 @@ components:
           type: boolean
           nullable: true
           description: Active status (defaults to true)
+        notify:
+          type: boolean
+          nullable: true
+          description: Feeding reminder flag (defaults to false)
         rules:
           nullable: true
           description: Window-based schedule rules
@@ -3277,6 +3285,10 @@ components:
         active:
           type: boolean
           nullable: true
+        notify:
+          type: boolean
+          nullable: true
+          description: Feeding reminder flag
         rules:
           nullable: true
           description: Window-based schedule rules
@@ -3938,10 +3950,17 @@ components:
           type: string
           format: date-time
           nullable: true
+          description: >
+            Naive local datetime (YYYY-MM-DDTHH:MM:SS). Omit for a real-time
+            entry (server stamps now). When omitted with local_date, the
+            time-of-day is now on that journal day.
         local_date:
           type: string
           format: date
           nullable: true
+          description: >
+            Journal day. Defaults to the date of occurred_at, or today when
+            occurred_at is also omitted.
         subtype:
           type: string
           nullable: true

@@ -93,6 +93,27 @@ export const CompactMobile: Story = {
 
 export const CompactMobileNarrow = asNarrowStory(CompactMobile);
 
+/** Longest English month name — must shorten on a 360px journal header. */
+export const LongMonthName: Story = {
+  args: {
+    month: '2024-09',
+    selectedDate: '2024-09-09',
+    compact: true,
+    highlights: packedMonthHighlights('2024-09'),
+    onGoToToday: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('.calendar-month--long')).toBeVisible();
+  },
+};
+
+export const LongMonthNameNarrow = asNarrowStory({
+  ...LongMonthName,
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('.calendar-month--short')).toBeVisible();
+  },
+});
+
 export const SettingsLegend: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { daysInclusive, shiftDate } from './dates';
+import { daysInclusive, formatMonthHeading, shiftDate } from './dates';
 
 describe('shiftDate', () => {
   it('moves forward and backward by whole local calendar days', () => {
@@ -29,5 +29,13 @@ describe('daysInclusive', () => {
 
   it('crosses month boundaries', () => {
     expect(daysInclusive('2026-07-31', '2026-08-01')).toBe(2);
+  });
+});
+
+describe('formatMonthHeading', () => {
+  it('short form is shorter than the long month name', () => {
+    expect(formatMonthHeading('2024-09', 'short').length).toBeLessThan(
+      formatMonthHeading('2024-09', 'long').length,
+    );
   });
 });

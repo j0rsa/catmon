@@ -85,7 +85,9 @@ jobs:
         run: npm run lint
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium --with-deps
+        # Skip --with-deps: it apt-updates the runner's Google Chrome repo,
+        # which currently fails with a Packages.gz hash mismatch.
+        run: npx playwright install chromium
 
       - name: Test (Storybook + Vitest)
         run: npx vitest run

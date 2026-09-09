@@ -1,8 +1,9 @@
 use crate::domain::elimination::EliminationRecord;
 use crate::domain::notification::{
     CreateNotification, NotificationUnreadCount, NotificationView,
-    KIND_ELIMINATION_AUTO_CATEGORIZE_FAILED,
+    KIND_ELIMINATION_AUTO_CATEGORIZE_FAILED, KIND_FEEDING_NUDGE, SOURCE_KIND_FEEDING_NUDGE,
 };
+use crate::domain::nutrition_status::ScheduleKind;
 use crate::error::AppResult;
 use crate::repo::notifications;
 use crate::services::elimination_auto_categorize::AutoCategorizeFailureReason;
@@ -78,6 +79,38 @@ pub async fn notify_elimination_auto_categorize_failed(
             pet_name: Some(pet_name.to_string()),
             source_kind: Some("elimination_record".to_string()),
             source_id: Some(record.id.clone()),
+        },
+    )
+    .await?;
+
+    if let Some(notification) = created {
+        push_service::spawn_broadcast(pool.clone(), notification);
+    }
+    Ok(())
+}
+
+#[tracing::instrument(skip(pool, schedule))]
+pub async fn notify_feeding_nudge(
+    pool: &SqlitePool,
+    schedule: &crate::domain::nutrition_schedule::NutritionSchedule,
+    pet_name: &str,
+    kind: ScheduleKind,
+    local_date: &str,
+    window_from: &str,
+) -> AppResult<()> {
+    let noun = kind.noun();
+    let created = notifications::create(
+        pool,
+        CreateNotification {
+            kind: KIND_FEEDING_NUDGE.to_string(),
+            title: format!("Time to give some {noun} to {pet_name}."),
+            body: Some(format!("{} · {window_from}", schedule.name)),
+            link_path: "/nutrition".to_string(),
+            link_hash: None,
+            pet_id: Some(schedule.pet_id),
+            pet_name: Some(pet_name.to_string()),
+            source_kind: Some(SOURCE_KIND_FEEDING_NUDGE.to_string()),
+            source_id: Some(format!("{}:{local_date}:{window_from}", schedule.id)),
         },
     )
     .await?;

@@ -25,6 +25,15 @@ pub struct NutritionStatusIntake {
     pub total_known_fluid_ml: f64,
 }
 
+impl NutritionStatusIntake {
+    pub fn amount_for(&self, kind: ScheduleKind) -> f64 {
+        match kind {
+            ScheduleKind::Liquid => self.direct_liquid_ml,
+            ScheduleKind::Food => self.wet_food_g + self.dry_food_g,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct NutritionStatusSchedule {
     pub schedule_id: String,
@@ -51,14 +60,91 @@ pub struct ScheduleWindow {
     pub note: Option<String>,
 }
 
-pub fn parse_liquid_schedule_windows(rules_json: &str) -> Vec<ScheduleWindow> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScheduleKind {
+    Liquid,
+    Food,
+}
+
+impl ScheduleKind {
+    pub fn noun(self) -> &'static str {
+        match self {
+            ScheduleKind::Liquid => "liquid",
+            ScheduleKind::Food => "food",
+        }
+    }
+}
+
+pub fn parse_schedule_kind(rules_json: &str) -> ScheduleKind {
+    let Ok(parsed) = serde_json::from_str::<ParsedScheduleRules>(rules_json) else {
+        return ScheduleKind::Liquid;
+    };
+    if parsed.schedule_type.as_deref() == Some("food") {
+        ScheduleKind::Food
+    } else {
+        ScheduleKind::Liquid
+    }
+}
+
+pub fn parse_schedule_windows(rules_json: &str) -> Vec<ScheduleWindow> {
     let Ok(parsed) = serde_json::from_str::<ParsedScheduleRules>(rules_json) else {
         return Vec::new();
     };
-    if parsed.schedule_type.as_deref() != Some("liquid") {
+    parsed.windows.unwrap_or_default()
+}
+
+pub fn parse_liquid_schedule_windows(rules_json: &str) -> Vec<ScheduleWindow> {
+    if parse_schedule_kind(rules_json) != ScheduleKind::Liquid {
         return Vec::new();
     }
-    parsed.windows.unwrap_or_default()
+    parse_schedule_windows(rules_json)
+}
+
+/// Cumulative amount due once each window's `from` time has been reached.
+/// Feeding reminders step at the window start ("time to give"), unlike the
+/// chart's midpoint projection in [`schedule_projection_at`].
+pub fn schedule_due_at(windows: &[ScheduleWindow], at_minutes: i32) -> f64 {
+    let mut due = 0.0;
+    for window in windows {
+        if window.max <= 0.0 {
+            continue;
+        }
+        let Some(from_m) = parse_hhmm(&window.from) else {
+            continue;
+        };
+        if at_minutes >= from_m {
+            due += window.max;
+        }
+    }
+    due
+}
+
+/// Windows whose start time has been reached and that contribute an amount.
+pub fn reached_feeding_windows(
+    windows: &[ScheduleWindow],
+    at_minutes: i32,
+) -> Vec<&ScheduleWindow> {
+    windows
+        .iter()
+        .filter(|window| {
+            window.max > 0.0 && parse_hhmm(&window.from).is_some_and(|from_m| at_minutes >= from_m)
+        })
+        .collect()
+}
+
+/// Feeding reminders and window times align to this step so the worker
+/// (every 10 minutes) can match a window start without waiting a full hour.
+pub const FEEDING_TIME_STEP_MINUTES: i32 = 10;
+
+/// Floor an `HH:MM` time down to a `step_minutes` boundary.
+/// `23:55` with a 10-minute step becomes `23:50` — never wraps to the next day.
+pub fn floor_hhmm_to_step(time: &str, step_minutes: i32) -> Option<String> {
+    if step_minutes <= 0 {
+        return None;
+    }
+    let mins = parse_hhmm(time)?;
+    let floored = (mins / step_minutes) * step_minutes;
+    Some(format!("{:02}:{:02}", floored / 60, floored % 60))
 }
 
 pub fn parse_hhmm(time: &str) -> Option<i32> {
@@ -144,5 +230,42 @@ mod tests {
     fn parse_liquid_schedule_windows_ignores_food_schedules() {
         let rules = r#"{"type":"food","windows":[{"from":"08:00","to":"09:00","min":1,"max":2}]}"#;
         assert!(parse_liquid_schedule_windows(rules).is_empty());
+    }
+
+    #[test]
+    fn schedule_due_at_steps_at_window_from() {
+        let windows = vec![
+            ScheduleWindow {
+                from: "08:00".to_string(),
+                to: "09:00".to_string(),
+                min: 10.0,
+                max: 50.0,
+                note: None,
+            },
+            ScheduleWindow {
+                from: "12:00".to_string(),
+                to: "13:00".to_string(),
+                min: 10.0,
+                max: 40.0,
+                note: None,
+            },
+        ];
+
+        assert_eq!(schedule_due_at(&windows, 7 * 60 + 59), 0.0);
+        assert_eq!(schedule_due_at(&windows, 8 * 60), 50.0);
+        assert_eq!(schedule_due_at(&windows, 11 * 60 + 59), 50.0);
+        assert_eq!(schedule_due_at(&windows, 12 * 60), 90.0);
+        assert_eq!(reached_feeding_windows(&windows, 8 * 60).len(), 1);
+        assert_eq!(reached_feeding_windows(&windows, 12 * 60).len(), 2);
+    }
+
+    #[test]
+    fn floor_hhmm_to_step_ten() {
+        assert_eq!(floor_hhmm_to_step("08:04", 10).as_deref(), Some("08:00"));
+        assert_eq!(floor_hhmm_to_step("08:05", 10).as_deref(), Some("08:00"));
+        assert_eq!(floor_hhmm_to_step("08:00", 10).as_deref(), Some("08:00"));
+        assert_eq!(floor_hhmm_to_step("08:09", 10).as_deref(), Some("08:00"));
+        assert_eq!(floor_hhmm_to_step("23:55", 10).as_deref(), Some("23:50"));
+        assert_eq!(floor_hhmm_to_step("23:54", 10).as_deref(), Some("23:50"));
     }
 }

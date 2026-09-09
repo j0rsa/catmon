@@ -140,6 +140,7 @@ export const mockNutritionSchedules: NutritionSchedule[] = [
     pet_id: mockPetId,
     name: 'Mittens hydration routine',
     active: true,
+    notify: false,
     rules_json: JSON.stringify({
       type: 'liquid',
       windows: [
@@ -150,6 +151,22 @@ export const mockNutritionSchedules: NutritionSchedule[] = [
         { from: '15:30', to: '16:30', min: 12, max: 15, note: 'Important afternoon portion' },
         { from: '17:30', to: '18:30', min: 10, max: 13, note: 'Before the fasting window' },
         { from: '22:00', to: '23:00', min: 8, max: 15, note: 'With prednisolone, if she accepts' },
+      ],
+    }),
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+  {
+    id: 'sched-food',
+    pet_id: mockPetId,
+    name: 'Wet food plan',
+    active: true,
+    notify: true,
+    rules_json: JSON.stringify({
+      type: 'food',
+      windows: [
+        { from: '07:30', to: '08:00', min: 40, max: 50, note: 'Breakfast' },
+        { from: '18:00', to: '18:30', min: 40, max: 50, note: 'Dinner' },
       ],
     }),
     created_at: '2024-01-01T00:00:00Z',
@@ -466,6 +483,18 @@ export const mockNotifications: NotificationItem[] = [
     pet_name: 'Mittens',
     created_at: new Date(Date.now() - 5 * 60_000).toISOString(),
     read: false,
+  },
+  {
+    id: 'n-feed',
+    kind: 'nutrition.feeding_nudge',
+    title: 'Time to give some liquid to Mittens.',
+    body: 'Mittens hydration routine · 08:30',
+    link_path: '/nutrition',
+    link_hash: null,
+    pet_id: mockPetId,
+    pet_name: 'Mittens',
+    created_at: new Date(Date.now() - 20 * 60_000).toISOString(),
+    read: true,
   },
   {
     id: 'n-2',

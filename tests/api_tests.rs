@@ -1513,6 +1513,37 @@ macro_rules! api_create_elimination {
     }};
 }
 
+/// Omit occurred_at: server stamps now. With local_date, the journal day is kept
+/// and the time-of-day is now.
+#[actix_web::test]
+async fn elimination_record_omitted_occurred_at_keeps_local_date() {
+    let (app, _state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "ToiletNow");
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/elimination/records")
+        .set_json(serde_json::json!({
+            "pet_id": pet_id,
+            "event_type": "urination",
+            "local_date": "2026-06-01"
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let status = resp.status();
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(status, 201, "create failed: {body}");
+    assert_eq!(body["local_date"].as_str(), Some("2026-06-01"));
+    let occurred_at = body["occurred_at"].as_str().expect("occurred_at missing");
+    assert!(
+        occurred_at.starts_with("2026-06-01T"),
+        "occurred_at '{occurred_at}' should stay on the journal day"
+    );
+    assert!(
+        !occurred_at.ends_with('Z') && !occurred_at.contains('+'),
+        "occurred_at '{occurred_at}' must be naive (no Z or +offset)"
+    );
+}
+
 /// General elimination records with duration are auto-tagged on the backend when enabled.
 #[actix_web::test]
 async fn elimination_auto_categorize_by_duration() {
@@ -4921,4 +4952,268 @@ async fn pet_settings_nudge_roundtrip() {
     assert_eq!(resp.status(), 200);
     let body: serde_json::Value = test::read_body_json(resp).await;
     assert_eq!(body["morning"]["enabled"], true);
+}
+
+#[actix_web::test]
+async fn nutrition_schedule_notify_roundtrip_and_floors_times() {
+    let (app, _state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "NotifySnap");
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/nutrition/schedules")
+        .set_json(serde_json::json!({
+            "pet_id": pet_id,
+            "name": "Hydration",
+            "notify": true,
+            "rules": {
+                "type": "liquid",
+                "windows": [
+                    { "from": "08:07", "to": "09:04", "min": 10, "max": 50 }
+                ]
+            }
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 201);
+    let created: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(created["notify"].as_bool(), Some(true));
+    let rules: serde_json::Value =
+        serde_json::from_str(created["rules_json"].as_str().unwrap()).unwrap();
+    assert_eq!(rules["windows"][0]["from"], "08:00");
+    assert_eq!(rules["windows"][0]["to"], "09:00");
+
+    let schedule_id = created["id"].as_str().unwrap();
+    let req = test::TestRequest::patch()
+        .uri(&format!("/api/v1/nutrition/schedules/{schedule_id}"))
+        .set_json(serde_json::json!({ "notify": false }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let updated: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(updated["notify"].as_bool(), Some(false));
+}
+
+#[actix_web::test]
+async fn feeding_nudge_notifies_when_behind_at_window_start() {
+    use chrono::TimeZone;
+    use petmon::domain::notification::KIND_FEEDING_NUDGE;
+
+    let (app, state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "FeedNudge");
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/nutrition/schedules")
+        .set_json(serde_json::json!({
+            "pet_id": pet_id,
+            "name": "Hydration",
+            "notify": true,
+            "rules": {
+                "type": "liquid",
+                "windows": [
+                    { "from": "08:00", "to": "09:00", "min": 10, "max": 50 },
+                    { "from": "12:00", "to": "13:00", "min": 10, "max": 40 }
+                ]
+            }
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 201);
+
+    let before = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 7, 50, 0)
+        .unwrap();
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, before)
+        .await
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications?unread_only=true")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let notes: serde_json::Value = test::read_body_json(resp).await;
+    assert!(
+        notes.as_array().unwrap().is_empty(),
+        "no notify before window start"
+    );
+
+    let at_window = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 8, 0, 0)
+        .unwrap();
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_window)
+        .await
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications?unread_only=true")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let notes: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(notes.as_array().unwrap().len(), 1);
+    assert_eq!(notes[0]["kind"].as_str(), Some(KIND_FEEDING_NUDGE));
+    assert_eq!(
+        notes[0]["title"].as_str(),
+        Some("Time to give some liquid to FeedNudge.")
+    );
+    assert_eq!(notes[0]["body"].as_str(), Some("Hydration · 08:00"));
+    assert_eq!(notes[0]["link_path"].as_str(), Some("/nutrition"));
+
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_window)
+        .await
+        .unwrap();
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications?unread_only=true")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let notes: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(
+        notes.as_array().unwrap().len(),
+        1,
+        "duplicate feeding reminder must be suppressed"
+    );
+
+    let midday = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 12, 0, 0)
+        .unwrap();
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, midday)
+        .await
+        .unwrap();
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications?unread_only=true")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let notes: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(
+        notes.as_array().unwrap().len(),
+        2,
+        "second window gets its own reminder"
+    );
+}
+
+#[actix_web::test]
+async fn feeding_nudge_skips_when_intake_meets_due_or_notify_off() {
+    use chrono::TimeZone;
+
+    let (app, state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "OnTrackNudge");
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/nutrition/schedules")
+        .set_json(serde_json::json!({
+            "pet_id": pet_id,
+            "name": "Hydration",
+            "notify": true,
+            "rules": {
+                "type": "liquid",
+                "windows": [
+                    { "from": "08:00", "to": "09:00", "min": 10, "max": 50 }
+                ]
+            }
+        }))
+        .to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), 201);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/nutrition/records")
+        .set_json(serde_json::json!({
+            "pet_id": pet_id,
+            "category": "liquids",
+            "amount": 50,
+            "unit": "ml",
+            "occurred_at": "2026-07-18T07:30:00",
+            "local_date": "2026-07-18"
+        }))
+        .to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), 201);
+
+    let at_window = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 8, 0, 0)
+        .unwrap();
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_window)
+        .await
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications?unread_only=true")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let notes: serde_json::Value = test::read_body_json(resp).await;
+    assert!(
+        notes.as_array().unwrap().is_empty(),
+        "on-track intake should not notify"
+    );
+
+    let pet_id = api_create_pet!(&app, "SilentNudge");
+    let req = test::TestRequest::post()
+        .uri("/api/v1/nutrition/schedules")
+        .set_json(serde_json::json!({
+            "pet_id": pet_id,
+            "name": "Meals",
+            "notify": false,
+            "rules": {
+                "type": "food",
+                "windows": [
+                    { "from": "08:00", "to": "09:00", "min": 20, "max": 40 }
+                ]
+            }
+        }))
+        .to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), 201);
+
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_window)
+        .await
+        .unwrap();
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications?unread_only=true")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let notes: serde_json::Value = test::read_body_json(resp).await;
+    assert!(
+        notes.as_array().unwrap().is_empty(),
+        "notify=false must not send a reminder"
+    );
+}
+
+#[actix_web::test]
+async fn feeding_nudge_food_schedule_uses_food_wording() {
+    use chrono::TimeZone;
+    use petmon::domain::notification::KIND_FEEDING_NUDGE;
+
+    let (app, state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "FoodNudge");
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/nutrition/schedules")
+        .set_json(serde_json::json!({
+            "pet_id": pet_id,
+            "name": "Meals",
+            "notify": true,
+            "rules": {
+                "type": "food",
+                "windows": [
+                    { "from": "08:00", "to": "09:00", "min": 20, "max": 40 }
+                ]
+            }
+        }))
+        .to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), 201);
+
+    let at_window = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 8, 10, 0)
+        .unwrap();
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_window)
+        .await
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications?unread_only=true")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let notes: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(notes.as_array().unwrap().len(), 1);
+    assert_eq!(notes[0]["kind"].as_str(), Some(KIND_FEEDING_NUDGE));
+    assert_eq!(
+        notes[0]["title"].as_str(),
+        Some("Time to give some food to FoodNudge.")
+    );
 }

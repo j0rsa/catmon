@@ -5,6 +5,7 @@ pub mod elimination_classifier;
 pub mod elimination_classifier_context;
 pub mod elimination_classifier_retrain;
 pub mod elimination_record_service;
+pub mod feeding_nudge_service;
 pub mod health_state_service;
 pub mod medication_service;
 pub mod notification_service;

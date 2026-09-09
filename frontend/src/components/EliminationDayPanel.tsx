@@ -13,11 +13,11 @@ import {
 } from '../api/elimination';
 import { TimeInput } from './TimeInput';
 import { EliminationDayChart } from './EliminationDayChart';
-import { nowTimeString, isoFromDateAndTime } from '../lib/time';
+import { isoFromDateAndTime } from '../lib/time';
 import { localToday } from '../lib/dates';
 import { useFormatTime, useFormatDate } from '../context/useDisplaySettings';
 import { useScrollToHash } from '../hooks/useScrollToHash';
-import { digitsToDisplay, digitsToSecs, secsToDigits, normaliseDigits } from '../lib/duration';
+import { formatDurationMmss, normalizeDurationInput, parseDurationToSecs } from '../lib/duration';
 
 // ── Label maps ──────────────────────────────────────────────────────────────
 
@@ -60,32 +60,29 @@ const EVENT_TYPES: EliminationEventType[] = ['general', 'urination', 'defecation
 // ── DurationInput ─────────────────────────────────────────────────────────────
 
 interface DurationInputProps {
-  digits: string;
-  onChange: (digits: string) => void;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  onCommit?: () => void;
 }
 
-function DurationInput({ digits, onChange }: DurationInputProps) {
+function DurationInput({ value, onChange, disabled, onCommit }: DurationInputProps) {
   return (
     <input
       type="text"
-      inputMode="numeric"
+      autoComplete="off"
+      autoCorrect="off"
+      spellCheck={false}
       className="record-entry-duration"
-      aria-label="Duration (MM:SS)"
-      value={digitsToDisplay(digits)}
+      aria-label="Duration (mm:ss)"
+      placeholder="mm:ss"
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={() => onChange(normalizeDurationInput(value))}
       onKeyDown={(e) => {
-        if (e.key === 'Backspace') {
-          onChange(digits.slice(0, -1));
-          e.preventDefault();
-        }
+        if (e.key === 'Enter') onCommit?.();
       }}
-      onChange={(e) => {
-        const raw = e.target.value.replace(/\D/g, '');
-        const newDigit = raw.slice(-1);
-        if (newDigit && digits.length < 4) {
-          onChange(digits + newDigit);
-        }
-      }}
-      onBlur={() => onChange(normaliseDigits(digits))}
     />
   );
 }
@@ -208,10 +205,10 @@ const AddRow = forwardRef<AddRowHandle, AddRowProps>(function AddRow(
   { date, petId, onSave, saving, isPaused, disabled = false },
   ref,
 ) {
-  const [time, setTime] = useState(nowTimeString);
+  const [time, setTime] = useState('');
   const [eventType, setEventType] = useState<EliminationEventType>('urination');
   const [subtype, setSubtype] = useState('');
-  const [durationDigits, setDurationDigits] = useState('');
+  const [duration, setDuration] = useState('');
   const [note, setNote] = useState('');
 
   const availableSubtypes = subtypesFor(eventType);
@@ -219,9 +216,9 @@ const AddRow = forwardRef<AddRowHandle, AddRowProps>(function AddRow(
 
   useImperativeHandle(ref, () => ({
     clearForm() {
-      setTime(nowTimeString());
+      setTime('');
       setSubtype('');
-      setDurationDigits('');
+      setDuration('');
       setNote('');
     },
   }));
@@ -230,11 +227,11 @@ const AddRow = forwardRef<AddRowHandle, AddRowProps>(function AddRow(
     if (controlsDisabled) return;
     onSave({
       pet_id: petId,
-      occurred_at: isoFromDateAndTime(date, time),
+      occurred_at: time ? isoFromDateAndTime(date, time) : undefined,
       local_date: date,
       event_type: eventType,
       subtype: subtype || null,
-      duration_seconds: digitsToSecs(durationDigits),
+      duration_seconds: parseDurationToSecs(duration),
       note: note.trim() || null,
       source_type: 'manual',
     });
@@ -282,7 +279,12 @@ const AddRow = forwardRef<AddRowHandle, AddRowProps>(function AddRow(
       </div>
       <div className="form-row">
         <label>Duration</label>
-        <DurationInput digits={durationDigits} onChange={setDurationDigits} />
+        <DurationInput
+          value={duration}
+          onChange={setDuration}
+          disabled={controlsDisabled}
+          onCommit={handleAdd}
+        />
       </div>
       <div className="form-row">
         <label>Note</label>
@@ -338,7 +340,7 @@ function RecordRow({
   const [time, setTime] = useState('');
   const [eventType, setEventType] = useState<EliminationEventType>('general');
   const [subtype, setSubtype] = useState('');
-  const [durationDigits, setDurationDigits] = useState('');
+  const [duration, setDuration] = useState('');
   const [note, setNote] = useState('');
 
   const availableSubtypes = subtypesFor(eventType);
@@ -352,18 +354,17 @@ function RecordRow({
     setTime(record.occurred_at.slice(11, 16));
     setEventType(record.event_type);
     setSubtype(record.subtype ?? '');
-    setDurationDigits(record.duration_seconds != null ? secsToDigits(record.duration_seconds) : '');
+    setDuration(record.duration_seconds != null ? formatDurationMmss(record.duration_seconds) : '');
     setNote(record.note ?? '');
     setEditingState(true);
   }
 
   function commitEdit() {
     onSave(record.id, {
-      occurred_at: isoFromDateAndTime(record.local_date, time),
-      local_date: record.local_date,
+      ...(time ? { occurred_at: isoFromDateAndTime(record.local_date, time), local_date: record.local_date } : {}),
       event_type: eventType,
       subtype: subtype || null,
-      duration_seconds: digitsToSecs(durationDigits),
+      duration_seconds: parseDurationToSecs(duration),
       note: note.trim() || null,
     });
     setEditingState(false);
@@ -372,53 +373,68 @@ function RecordRow({
   if (editing) {
     return (
       <div className="entry-row-wrap entry-row-editing">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.25rem 0' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <TimeInput value={time} onChange={setTime} autoFocus />
-            <select
-              className="entry-inline-input entry-inline-select"
-              aria-label="Event type"
-              value={eventType}
-              onChange={(e) => { setEventType(e.target.value as EliminationEventType); setSubtype(''); }}
-            >
-              {EVENT_TYPES.map((t) => (
-                <option key={t} value={t}>{EVENT_TYPE_LABELS[t]}</option>
-              ))}
-            </select>
-            {availableSubtypes && (
+        <div className="record-entry-form record-entry-form--elimination record-entry-form--edit">
+          <div className="form-row">
+            <label>Time</label>
+            <TimeInput value={time} onChange={setTime} variant="form" autoFocus />
+          </div>
+          <div className="form-row">
+            <label>Type</label>
+            <div className="record-entry-type-stack">
               <select
-                className="entry-inline-input entry-inline-select"
-                aria-label="Subtype"
-                value={subtype}
-                onChange={(e) => setSubtype(e.target.value)}
+                aria-label="Event type"
+                value={eventType}
+                onChange={(e) => { setEventType(e.target.value as EliminationEventType); setSubtype(''); }}
               >
-                <option value="">— subtype —</option>
-                {availableSubtypes.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
+                {EVENT_TYPES.map((t) => (
+                  <option key={t} value={t}>{EVENT_TYPE_LABELS[t]}</option>
                 ))}
               </select>
-            )}
-            <DurationInput digits={durationDigits} onChange={setDurationDigits} />
+              {availableSubtypes && (
+                <select
+                  aria-label="Subtype"
+                  value={subtype}
+                  onChange={(e) => setSubtype(e.target.value)}
+                >
+                  <option value="">— subtype —</option>
+                  {availableSubtypes.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="form-row">
+            <label>Duration</label>
+            <DurationInput value={duration} onChange={setDuration} onCommit={commitEdit} />
+          </div>
+          <div className="form-row record-entry-form__note">
+            <label>Note</label>
             <input
-              className="entry-inline-input"
-              style={{ flex: 1, minWidth: '10rem' }}
               type="text"
               aria-label="Note"
-              placeholder="note (optional)"
+              placeholder="Optional"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingState(false); }}
             />
-            <div className="entry-row-actions">
-              <button className="icon-button" type="button" title="Save" aria-label="Save" disabled={saving} onClick={commitEdit}>
-                {savingPaused ? '⏸' : saving ? '…' : '✓'}
-              </button>
-              <button className="icon-button" type="button" title="Cancel" aria-label="Cancel" onClick={() => setEditingState(false)}>
-                ✕
-              </button>
-            </div>
+          </div>
+          <div className="record-entry-form__actions">
+            <button
+              className="button button-compact"
+              type="button"
+              disabled={saving}
+              onClick={commitEdit}
+            >
+              {savingPaused ? 'Offline…' : saving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              className="button button-secondary button-compact"
+              type="button"
+              onClick={() => setEditingState(false)}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       </div>

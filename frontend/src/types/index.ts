@@ -110,6 +110,7 @@ export interface NutritionSchedule {
   pet_id: string;
   name: string;
   active: boolean;
+  notify: boolean;
   rules_json: string;
   created_at: string;
   updated_at: string;

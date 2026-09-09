@@ -358,6 +358,7 @@ fn tool_list() -> Value {
                         "pet_id": { "type": "string", "format": "uuid" },
                         "name":   { "type": "string" },
                         "active": { "type": "boolean" },
+                        "notify": { "type": "boolean", "description": "Send a feeding reminder at each window start if intake is behind." },
                         "rules":  { "type": "array" }
                     }
                 }
@@ -372,6 +373,7 @@ fn tool_list() -> Value {
                         "id":     { "type": "string" },
                         "name":   { "type": "string" },
                         "active": { "type": "boolean" },
+                        "notify": { "type": "boolean", "description": "Send a feeding reminder at each window start if intake is behind." },
                         "rules":  { "type": "array" }
                     }
                 }
@@ -405,7 +407,7 @@ fn tool_list() -> Value {
             },
             {
                 "name": "elimination.records.create",
-                "description": "Log a toileting event. subtype for defecation: normal|soft|liquid|hard|blood|mucus; for vomit: food|fur|bile|other",
+                "description": "Log a toileting event. Omit occurred_at for a real-time entry (server stamps now). Provide local_date without occurred_at to keep it on that journal day with the current time-of-day. subtype for defecation: normal|soft|liquid|hard|blood|mucus; for vomit: food|fur|bile|other",
                 "inputSchema": {
                     "type": "object",
                     "required": ["pet_id", "event_type"],
@@ -414,7 +416,8 @@ fn tool_list() -> Value {
                         "event_type":       { "type": "string", "enum": ["general", "urination", "defecation", "vomit", "no_output"] },
                         "subtype":          { "type": "string" },
                         "duration_seconds": { "type": "integer" },
-                        "occurred_at":      { "type": "string", "format": "date-time" },
+                        "occurred_at":      { "type": "string", "format": "date-time", "description": "Naive local datetime YYYY-MM-DDTHH:MM:SS. Omit for now." },
+                        "local_date":       { "type": "string", "format": "date", "description": "Journal day YYYY-MM-DD. Defaults to the date of occurred_at (or today)." },
                         "note":             { "type": "string" }
                     }
                 }

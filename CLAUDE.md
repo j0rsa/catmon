@@ -36,6 +36,8 @@ Known pet-setting keys: `med_nudge` (medication nudge schedule — morning/midda
 
 Adding a new pet-setting key: add the constant + types to `src/domain/pet_settings.rs`, add a match arm in `src/api/pet_settings.rs`, extend `PetSettingsKey` and `PetSettingsMap` in `frontend/src/api/petSettings.ts`.
 
+**Feeding reminders** live on each `nutrition_schedules` row (`notify`), not `pet_settings`. Toggle is on Nutrition → Feeding, per schedule. Window `from`/`to` floor to 10-minute steps (UI floors on blur; the API floors on save) so a late time never wraps into the next day. A worker runs every 10 minutes; if a window start has passed and today's intake is still below the cumulative amount due at that time, it sends in-app + push to every subscriber: `Time to give some {food|liquid} to {pet}.` Deduped per schedule + date + window `from`.
+
 Push subscriptions remain per browser endpoint; notification read state and push ownership follow `reader_key`.
 
 **Selected pet** is browser-local (`localStorage` key `petmon-selected-pet-id`), not a user setting. Restore it after refresh. While the pets query is pending, `data` is `undefined` — do not treat the `data ?? []` empty array as “no pets”, or the stored id is wiped and the UI falls back to the first pet.
@@ -105,6 +107,8 @@ Mobile decimal fields often show a comma (`,`) instead of a dot (`.`). **Never u
 - Validate with `Number.isFinite(parseDecimal(value)) && parseDecimal(value) > 0` (or `!isNaN(...)` where zero is allowed)
 
 **Do not** use `Number.parseFloat` directly on raw input strings.
+
+**Toilet duration** is optional `mm:ss` text (`type="text"`, placeholder `mm:ss`). Parse with `parseDurationToSecs` in `frontend/src/lib/duration.ts` — `:` / `.` / `,` are separators so `1.23` and `1,23` still work when a decimal pad is used. Empty or zero omits `duration_seconds`. Do not use ATM digit-shifting or `type="time"` (that is clock time, not duration). Do not set `inputMode="numeric"` / `"decimal"` on this field — those pads hide the colon.
 
 ### Touching anything
 - **Cargo version — one bump per PR.** Bump `version` in `Cargo.toml` (and the matching `petmon` entry in `Cargo.lock`) **once** for the whole branch/PR, following semver:

@@ -9,7 +9,7 @@ pub async fn list_schedules(
     pet_id: Option<Uuid>,
 ) -> AppResult<Vec<NutritionSchedule>> {
     let mut query = String::from(
-        "SELECT id, pet_id, name, active, rules_json, created_at, updated_at FROM nutrition_schedules",
+        "SELECT id, pet_id, name, active, notify, rules_json, created_at, updated_at FROM nutrition_schedules",
     );
     if pet_id.is_some() {
         query.push_str(" WHERE pet_id = ?");
@@ -29,7 +29,7 @@ pub async fn list_schedules(
 
 pub async fn get_schedule(pool: &SqlitePool, id: &str) -> AppResult<NutritionSchedule> {
     sqlx::query_as::<_, NutritionSchedule>(
-        "SELECT id, pet_id, name, active, rules_json, created_at, updated_at FROM nutrition_schedules WHERE id = ?",
+        "SELECT id, pet_id, name, active, notify, rules_json, created_at, updated_at FROM nutrition_schedules WHERE id = ?",
     )
     .bind(id)
     .fetch_optional(pool)
@@ -43,13 +43,15 @@ pub async fn create_schedule(
     schedule: NutritionSchedule,
 ) -> AppResult<NutritionSchedule> {
     let active_i = if schedule.active { 1_i64 } else { 0_i64 };
+    let notify_i = if schedule.notify { 1_i64 } else { 0_i64 };
     sqlx::query(
-        "INSERT INTO nutrition_schedules (id, pet_id, name, active, rules_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO nutrition_schedules (id, pet_id, name, active, notify, rules_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&schedule.id)
     .bind(schedule.pet_id)
     .bind(&schedule.name)
     .bind(active_i)
+    .bind(notify_i)
     .bind(&schedule.rules_json)
     .bind(&schedule.created_at)
     .bind(&schedule.updated_at)
@@ -71,22 +73,42 @@ pub async fn update_schedule(
     if let Some(active) = req.active {
         schedule.active = active;
     }
+    if let Some(notify) = req.notify {
+        schedule.notify = notify;
+    }
     if let Some(rules) = req.rules {
         schedule.rules_json = crate::domain::nutrition_schedule::normalize_rules_json(Some(rules))?;
     }
     schedule.updated_at = now;
     let active_i = if schedule.active { 1_i64 } else { 0_i64 };
+    let notify_i = if schedule.notify { 1_i64 } else { 0_i64 };
     sqlx::query(
-        "UPDATE nutrition_schedules SET name=?, active=?, rules_json=?, updated_at=? WHERE id=?",
+        "UPDATE nutrition_schedules SET name=?, active=?, notify=?, rules_json=?, updated_at=? WHERE id=?",
     )
     .bind(&schedule.name)
     .bind(active_i)
+    .bind(notify_i)
     .bind(&schedule.rules_json)
     .bind(&schedule.updated_at)
     .bind(id)
     .execute(pool)
     .await?;
     Ok(schedule.with_normalized_rules())
+}
+
+/// Active schedules that have feeding reminders turned on.
+pub async fn list_notify_enabled(pool: &SqlitePool) -> AppResult<Vec<NutritionSchedule>> {
+    let rows = sqlx::query_as::<_, NutritionSchedule>(
+        "SELECT id, pet_id, name, active, notify, rules_json, created_at, updated_at \
+         FROM nutrition_schedules WHERE notify = 1 AND active = 1 \
+         ORDER BY created_at DESC",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(NutritionSchedule::with_normalized_rules)
+        .collect())
 }
 
 pub async fn delete_schedule(pool: &SqlitePool, id: &str) -> AppResult<()> {

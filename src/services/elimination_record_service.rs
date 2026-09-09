@@ -11,13 +11,23 @@ use chrono_tz::Tz;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-fn resolve_occurred_at(req: &CreateEliminationRecord, timezone: Tz) -> String {
-    req.occurred_at.clone().unwrap_or_else(|| {
-        Utc::now()
-            .with_timezone(&timezone)
-            .format("%Y-%m-%dT%H:%M:%S")
-            .to_string()
-    })
+/// Stamp now when `occurred_at` is omitted. If `local_date` is set (journal day),
+/// keep that date and use the current time-of-day so a blank Time field still
+/// lands on the day the user is looking at.
+fn resolve_occurred_at(
+    occurred_at: Option<&str>,
+    local_date: Option<&str>,
+    timezone: Tz,
+) -> String {
+    if let Some(ts) = occurred_at.filter(|s| !s.is_empty()) {
+        return ts.to_string();
+    }
+    let now = Utc::now().with_timezone(&timezone);
+    if let Some(date) = local_date.filter(|s| !s.is_empty()) {
+        format!("{}T{}", date, now.format("%H:%M:%S"))
+    } else {
+        now.format("%Y-%m-%dT%H:%M:%S").to_string()
+    }
 }
 
 #[tracing::instrument(skip(pool))]
@@ -45,7 +55,11 @@ pub async fn create(
         .await
         .map_err(|_| AppError::BadRequest(format!("Pet {} not found", req.pet_id)))?;
 
-    let occurred_at = resolve_occurred_at(&req, timezone);
+    let occurred_at = resolve_occurred_at(
+        req.occurred_at.as_deref(),
+        req.local_date.as_deref(),
+        timezone,
+    );
 
     let attempt = elimination_auto_categorize::attempt_auto_categorize(
         pool,
@@ -93,12 +107,11 @@ pub async fn create_with_weight(
         .await
         .map_err(|_| AppError::BadRequest(format!("Pet {} not found", req.pet_id)))?;
 
-    let occurred_at = req.occurred_at.clone().unwrap_or_else(|| {
-        Utc::now()
-            .with_timezone(&timezone)
-            .format("%Y-%m-%dT%H:%M:%S")
-            .to_string()
-    });
+    let occurred_at = resolve_occurred_at(
+        req.occurred_at.as_deref(),
+        req.local_date.as_deref(),
+        timezone,
+    );
     let local_date = req
         .local_date
         .clone()

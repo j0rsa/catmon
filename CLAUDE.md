@@ -162,7 +162,7 @@ Treatment plan UI: known medications, assignments, and bundles are card lists, n
 
 ## Target devices and viewport specifications
 
-These are the primary client devices to check for usability. All UI work must be verified at the corresponding CSS viewport widths; Storybook stories use `asNarrowStory` / `withDeviceInsets()` to simulate the smallest breakpoints.
+These are the primary client devices to check for usability. All UI work must be verified at the corresponding CSS viewport widths; Storybook stories use `asNarrowStory` / `withDeviceInsets()` to simulate the smallest breakpoints. The same sizes are registered as Storybook viewport toolbar presets (`STORYBOOK_VIEWPORTS` in `frontend/src/stories/viewport.tsx`) so you can switch to them in the preview.
 
 ### Mobile devices
 

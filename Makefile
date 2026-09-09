@@ -57,7 +57,7 @@ check: check-fe check-be check-shortcut
 check-fe: install-fe
 	cd $(FE_DIR) && npx tsc --noEmit
 	cd $(FE_DIR) && npm run lint
-	cd $(FE_DIR) && npx playwright install chromium --with-deps
+	cd $(FE_DIR) && npx playwright install chromium
 	cd $(FE_DIR) && npx vitest run
 
 check-be:

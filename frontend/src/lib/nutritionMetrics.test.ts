@@ -29,15 +29,15 @@ describe('formatDayHint', () => {
 });
 
 describe('formatDayHintCompact', () => {
-  it('stacks short number+unit lines instead of joining with middots', () => {
+  it('stacks number-only lines instead of joining with middots', () => {
     const lines = formatDayHintCompact(packed);
     expect(lines.map((line) => line.text).join(' ')).not.toContain('·');
     expect(lines.map((line) => line.text)).toEqual([
-      `~${totalKnownFluidMl(packed)}ml`,
-      '340g',
-      '5ml',
-      '425ml',
-      '135g',
+      `~${totalKnownFluidMl(packed)}`,
+      '340',
+      '5',
+      '425',
+      '135',
     ]);
     expect(lines.map((line) => line.kind)).toEqual(['fluid', 'wet', 'liquids', 'water', 'dry']);
   });

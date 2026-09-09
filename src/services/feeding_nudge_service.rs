@@ -83,6 +83,7 @@ pub async fn run_feeding_nudge_check(pool: &SqlitePool, now_local: DateTime<Tz>)
         };
         let intake = nutrition_status_service::accumulate_intake(&records, &as_of);
         let kind = parse_schedule_kind(&schedule.rules_json);
+        // Liquid: total known fluid (chart `total`). Food: grams.
         let actual = intake.amount_for(kind);
 
         let pet_name = match pets::get_pet(pool, schedule.pet_id).await {

@@ -22,8 +22,24 @@ interface MonthCalendarProps {
   showSettings?: boolean;
 }
 
-const WEEKDAYS_SUN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const WEEKDAYS_MON = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAYS_SUN = [
+  { full: 'Sun', short: 'S' },
+  { full: 'Mon', short: 'M' },
+  { full: 'Tue', short: 'T' },
+  { full: 'Wed', short: 'W' },
+  { full: 'Thu', short: 'T' },
+  { full: 'Fri', short: 'F' },
+  { full: 'Sat', short: 'S' },
+] as const;
+const WEEKDAYS_MON = [
+  { full: 'Mon', short: 'M' },
+  { full: 'Tue', short: 'T' },
+  { full: 'Wed', short: 'W' },
+  { full: 'Thu', short: 'T' },
+  { full: 'Fri', short: 'F' },
+  { full: 'Sat', short: 'S' },
+  { full: 'Sun', short: 'S' },
+] as const;
 
 export function MonthCalendar({
   month,
@@ -50,11 +66,6 @@ export function MonthCalendar({
   return (
     <section className={`panel calendar-panel${compact ? ' calendar-panel--compact' : ''}`}>
       <div className="calendar-header">
-        <button className="button button-secondary button-compact calendar-nav-btn" type="button" onClick={() => onMonthChange(shiftMonth(month, -1))}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
         <div className="calendar-title">
           <p className="eyebrow">Journal</p>
           <h3>
@@ -62,34 +73,46 @@ export function MonthCalendar({
             <span className="calendar-month calendar-month--short">{displayMonthShort}</span>
           </h3>
         </div>
-        <div className="calendar-header-actions">
-          {showSettings && (
+        {showSettings && (
+          <div className="calendar-header-actions">
             <WidgetSettingsGear label="Calendar display settings">
               <NutritionCalendarSettingsFields settings={settings} onChange={update} />
             </WidgetSettingsGear>
-          )}
-          {onGoToToday && (
-            <button
-              className={`button button-compact${isOnToday ? '' : ' button-secondary'}`}
-              type="button"
-              disabled={isOnToday}
-              onClick={onGoToToday}
-              style={{ opacity: isOnToday ? 0.45 : 1 }}
-            >
-              Today
-            </button>
-          )}
-          <button className="button button-secondary button-compact calendar-nav-btn" type="button" onClick={() => onMonthChange(shiftMonth(month, 1))}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
+          </div>
+        )}
+      </div>
+      <div className="calendar-toolbar">
+        <button className="button button-secondary button-compact calendar-nav-btn" type="button" onClick={() => onMonthChange(shiftMonth(month, -1))}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        {onGoToToday ? (
+          <button
+            className={`button button-compact${isOnToday ? '' : ' button-secondary'}`}
+            type="button"
+            disabled={isOnToday}
+            onClick={onGoToToday}
+            style={{ opacity: isOnToday ? 0.45 : 1 }}
+          >
+            Today
           </button>
-        </div>
+        ) : (
+          <span className="calendar-toolbar-spacer" />
+        )}
+        <button className="button button-secondary button-compact calendar-nav-btn" type="button" onClick={() => onMonthChange(shiftMonth(month, 1))}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
       </div>
 
       <div className="calendar-weekdays">
-        {weekdays.map((day) => (
-          <span key={day}>{day}</span>
+        {weekdays.map((day, index) => (
+          <span key={`${day.full}-${index}`} aria-label={day.full}>
+            <span className="calendar-weekday-full">{day.full}</span>
+            <span className="calendar-weekday-short" aria-hidden="true">{day.short}</span>
+          </span>
         ))}
       </div>
 

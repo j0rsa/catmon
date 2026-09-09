@@ -3228,7 +3228,7 @@ components:
           description: Whether the schedule is active
         notify:
           type: boolean
-          description: When true, send a feeding reminder at each window start if today's intake is behind the amount due. The worker checks every 10 minutes.
+          description: When true, send a feeding reminder at each window start if today's intake is behind the amount due. Liquid schedules use total known fluid (direct liquids + wet-food moisture); food schedules use grams. The worker checks every 10 minutes.
         rules_json:
           type: string
           description: JSON-serialized window-based schedule rules

@@ -54,7 +54,7 @@ export type CalendarHintKind = 'fluid' | 'wet' | 'liquids' | 'water' | 'dry' | '
 export interface CalendarHintLine {
   kind: CalendarHintKind;
   text: string;
-  /** Full label for tooltips when the compact cell truncates. */
+  /** Full label for tooltips when the compact cell shows the number only. */
   title: string;
 }
 
@@ -69,35 +69,35 @@ export function formatDayHint(
     const ml = totalKnownFluidMl(highlight);
     if (ml > 0) {
       const title = `~${ml}ml fluid`;
-      parts.push({ kind: 'fluid', text: compact ? `~${ml}ml` : title, title });
+      parts.push({ kind: 'fluid', text: compact ? `~${ml}` : title, title });
     }
   }
   if (cfg?.calendar_show_wet_food ?? true) {
     if (highlight.wetFood > 0) {
       const n = Math.round(highlight.wetFood);
       const title = `${n}g wet`;
-      parts.push({ kind: 'wet', text: compact ? `${n}g` : title, title });
+      parts.push({ kind: 'wet', text: compact ? `${n}` : title, title });
     }
   }
   if (cfg?.calendar_show_liquids ?? true) {
     if (highlight.liquids > 0) {
       const n = Math.round(highlight.liquids);
       const title = `${n}ml liq`;
-      parts.push({ kind: 'liquids', text: compact ? `${n}ml` : title, title });
+      parts.push({ kind: 'liquids', text: compact ? `${n}` : title, title });
     }
   }
   if (cfg?.calendar_show_water ?? true) {
     if (highlight.water > 0) {
       const n = Math.round(highlight.water);
       const title = `${n}ml water`;
-      parts.push({ kind: 'water', text: compact ? `${n}ml` : title, title });
+      parts.push({ kind: 'water', text: compact ? `${n}` : title, title });
     }
   }
   if (cfg?.calendar_show_dry_food ?? true) {
     if (highlight.dryFood > 0) {
       const n = Math.round(highlight.dryFood);
       const title = `${n}g dry`;
-      parts.push({ kind: 'dry', text: compact ? `${n}g` : title, title });
+      parts.push({ kind: 'dry', text: compact ? `${n}` : title, title });
     }
   }
   if (parts.length === 0 && (cfg?.calendar_show_record_count ?? true)) {

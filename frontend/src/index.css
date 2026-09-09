@@ -740,6 +740,7 @@ pre {
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
+  position: relative;
 }
 
 .fluid-chart-best-day-label {
@@ -748,7 +749,6 @@ pre {
 }
 
 .widget-settings-gear {
-  position: relative;
   flex-shrink: 0;
 }
 
@@ -764,7 +764,8 @@ pre {
   top: calc(100% + 0.35rem);
   right: 0;
   z-index: 20;
-  width: min(320px, calc(100vw - 2rem));
+  box-sizing: border-box;
+  width: min(20rem, 100%);
   background: var(--surface);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
@@ -776,6 +777,7 @@ pre {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  min-width: 0;
 }
 
 .widget-settings-title {
@@ -814,6 +816,8 @@ pre {
 
 .widget-settings-checkbox {
   padding-top: 0;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .widget-settings-checkbox.calendar-legend-row {
@@ -825,6 +829,17 @@ pre {
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
+}
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.calendar-toolbar-spacer {
+  flex: 1;
 }
 
 .fluid-chart-tooltip {
@@ -1915,13 +1930,16 @@ pre {
 
 .calendar-panel {
   gap: 0.85rem;
+  container-type: inline-size;
+  container-name: calendar-panel;
 }
 
 .calendar-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
+  position: relative;
   container-type: inline-size;
   container-name: calendar-header;
 }
@@ -1943,6 +1961,8 @@ pre {
 .calendar-title h3 {
   font-size: 1.1rem;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .calendar-month--short {
@@ -1972,6 +1992,24 @@ pre {
   color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.calendar-weekday-short {
+  display: none;
+}
+
+@container calendar-panel (max-width: 22rem) {
+  .calendar-weekday-full {
+    display: none;
+  }
+
+  .calendar-weekday-short {
+    display: inline;
+  }
+
+  .calendar-weekdays span {
+    letter-spacing: 0;
+  }
 }
 
 .calendar-cell {
@@ -2020,6 +2058,7 @@ pre {
   min-width: 0;
   font-size: 0.68rem;
   line-height: 1.25;
+  font-variant-numeric: tabular-nums;
   color: var(--pill-text);
   white-space: nowrap;
   overflow: hidden;
@@ -2071,14 +2110,18 @@ pre {
   margin: 0;
 }
 
+.calendar-panel--compact {
+  padding: 0.85rem 0.65rem;
+}
+
 .calendar-panel--compact .calendar-weekdays,
 .calendar-panel--compact .calendar-grid {
-  gap: 0.28rem;
+  gap: 0.18rem;
 }
 
 .calendar-panel--compact .calendar-cell {
-  padding: 0.3rem 0.22rem;
-  gap: 0.1rem;
+  padding: 0.22rem 0.1rem;
+  gap: 0.08rem;
   border-radius: 10px;
 }
 
@@ -2087,8 +2130,8 @@ pre {
 }
 
 .calendar-panel--compact .calendar-hint {
-  font-size: 0.58rem;
-  line-height: 1.15;
+  font-size: 0.52rem;
+  line-height: 1.1;
 }
 
 .calendar-footnote {

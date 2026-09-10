@@ -99,7 +99,10 @@ pub async fn run_feeding_nudge_check(pool: &SqlitePool, now_local: DateTime<Tz>)
 
         // One reminder per check: attach it to the latest started window so
         // earlier windows do not all fire on the same tick when far behind.
-        let Some(window) = reached.iter().max_by_key(|w| parse_hhmm(&w.from).unwrap_or(-1)) else {
+        let Some(window) = reached
+            .iter()
+            .max_by_key(|w| parse_hhmm(&w.from).unwrap_or(-1))
+        else {
             continue;
         };
 

@@ -1,8 +1,10 @@
 use crate::auth::AppState;
-use crate::domain::weight::{CreateWeightRecord, WeightGranularity, WeightRecordFilters};
+use crate::domain::weight::{
+    CreateWeightRecord, UpdateWeightRecord, WeightGranularity, WeightGroupBy, WeightRecordFilters,
+};
 use crate::error::{AppError, AppResult};
 use crate::services::weight_service;
-use actix_web::{delete, get, post, web, HttpResponse};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
 use petmon_macros::require_scope;
 use serde::Deserialize;
 
@@ -24,6 +26,17 @@ pub async fn create_record(
 ) -> AppResult<HttpResponse> {
     let record = weight_service::create(&state.pool, body.into_inner(), state.timezone).await?;
     Ok(HttpResponse::Created().json(record))
+}
+
+#[patch("/{id}")]
+#[require_scope("api_write")]
+pub async fn update_record(
+    state: web::Data<AppState>,
+    id: web::Path<String>,
+    body: web::Json<UpdateWeightRecord>,
+) -> AppResult<HttpResponse> {
+    let record = weight_service::update(&state.pool, &id, body.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(record))
 }
 
 #[delete("/{id}")]
@@ -63,6 +76,7 @@ pub struct SummaryQuery {
     pub date_from: Option<String>,
     pub date_to: String,
     pub granularity: Option<WeightGranularity>,
+    pub group_by: Option<WeightGroupBy>,
 }
 
 #[get("/summary")]
@@ -75,12 +89,14 @@ pub async fn summary(
         return Err(AppError::BadRequest("pet_id required".to_string()));
     }
     let granularity = query.granularity.clone().unwrap_or_default();
+    let group_by = query.group_by.clone().unwrap_or_default();
     let buckets = weight_service::summary(
         &state.pool,
         &query.pet_id,
         query.date_from.as_deref(),
         &query.date_to,
         &granularity,
+        &group_by,
     )
     .await?;
     Ok(HttpResponse::Ok().json(buckets))
@@ -91,5 +107,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(create_record)
         .service(stats)
         .service(summary)
+        .service(update_record)
         .service(delete_record);
 }

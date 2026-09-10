@@ -13,7 +13,9 @@ use crate::domain::nutrition_record::{
 };
 use crate::domain::nutrition_schedule::{CreateNutritionSchedule, UpdateNutritionSchedule};
 use crate::domain::pet::{CreatePet, UpdatePet};
-use crate::domain::weight::{CreateWeightRecord, WeightRecordFilters};
+use crate::domain::weight::{
+    CreateWeightRecord, UpdateWeightRecord, WeightGroupBy, WeightRecordFilters,
+};
 use crate::error::{AppError, AppResult};
 use crate::services::{
     day_service, elimination_analytics_service, elimination_record_service, health_state_service,
@@ -506,7 +508,7 @@ fn tool_list() -> Value {
             },
             {
                 "name": "weight.records.create",
-                "description": "Record a weight measurement. Also updates the pet's current weight_kg.",
+                "description": "Record a weight measurement. Also updates the pet's current weight_kg. Notes are stored with hashtags: untagged text gets #manual prepended, and a bare Petkit word becomes #Petkit.",
                 "inputSchema": {
                     "type": "object",
                     "required": ["pet_id", "weight_kg"],
@@ -514,7 +516,19 @@ fn tool_list() -> Value {
                         "pet_id":      { "type": "string", "format": "uuid" },
                         "weight_kg":   { "type": "number" },
                         "measured_at": { "type": "string", "format": "date-time" },
-                        "note":        { "type": "string" }
+                        "note":        { "type": "string", "description": "Free-text note. Must include a #tag; #manual is added when missing." }
+                    }
+                }
+            },
+            {
+                "name": "weight.records.update",
+                "description": "Update the note on an existing weight record. Untagged text gets #manual prepended; a bare Petkit word becomes #Petkit. Pass note=null to reset to #manual.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["id"],
+                    "properties": {
+                        "id":   { "type": "string" },
+                        "note": { "type": ["string", "null"] }
                     }
                 }
             },
@@ -529,7 +543,7 @@ fn tool_list() -> Value {
             },
             {
                 "name": "weight.summary",
-                "description": "Get aggregated weight history bucketed by granularity. Use raw for ≤30d windows, daily for ≤90d, weekly for longer periods. Returns avg/min/max per bucket for chart rendering.",
+                "description": "Get aggregated weight history bucketed by granularity. Use daily for ≤90d (including 30d), weekly for longer periods. Pass group_by=tag to split series by the first hashtag in each note (#manual if none). Returns avg/min/max per bucket for chart rendering.",
                 "inputSchema": {
                     "type": "object",
                     "required": ["pet_id", "date_to"],
@@ -537,7 +551,8 @@ fn tool_list() -> Value {
                         "pet_id":      { "type": "string", "format": "uuid" },
                         "date_from":   { "type": "string", "format": "date" },
                         "date_to":     { "type": "string", "format": "date" },
-                        "granularity": { "type": "string", "enum": ["raw", "daily", "weekly"], "default": "daily" }
+                        "granularity": { "type": "string", "enum": ["raw", "daily", "weekly"], "default": "daily" },
+                        "group_by":    { "type": "string", "enum": ["none", "tag"], "default": "none" }
                     }
                 }
             },
@@ -1285,6 +1300,16 @@ pub async fn dispatch(
             let record = weight_service::create(pool, req, timezone).await?;
             Ok(json!(record))
         }
+        "weight.records.update" => {
+            let id = params["id"]
+                .as_str()
+                .ok_or_else(|| AppError::BadRequest("id required".to_string()))?
+                .to_string();
+            let req: UpdateWeightRecord =
+                serde_json::from_value(params).map_err(|e| AppError::BadRequest(e.to_string()))?;
+            let record = weight_service::update(pool, &id, req).await?;
+            Ok(json!(record))
+        }
         "weight.records.delete" => {
             let id = params["id"]
                 .as_str()
@@ -1304,8 +1329,13 @@ pub async fn dispatch(
                 .as_str()
                 .and_then(|s| serde_json::from_value(serde_json::Value::String(s.to_owned())).ok())
                 .unwrap_or_default();
+            let group_by: WeightGroupBy = params["group_by"]
+                .as_str()
+                .and_then(|s| serde_json::from_value(serde_json::Value::String(s.to_owned())).ok())
+                .unwrap_or_default();
             let buckets =
-                weight_service::summary(pool, pet_id, date_from, date_to, &granularity).await?;
+                weight_service::summary(pool, pet_id, date_from, date_to, &granularity, &group_by)
+                    .await?;
             Ok(json!(buckets))
         }
 

@@ -370,6 +370,7 @@ async fn mcp_tools_list_names_have_no_slashes() {
     }
     let names: Vec<_> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     assert!(names.contains(&"weight.records.create"));
+    assert!(names.contains(&"weight.records.update"));
     assert!(names.contains(&"pets.list"));
     assert!(names.contains(&"health.meds.assignments.end"));
     assert!(names.contains(&"health.meds.assignments.delete"));
@@ -1476,7 +1477,7 @@ async fn elimination_record_with_weight_creates_both_records() {
 
     assert!(weight["id"].as_str().is_some(), "weight.id missing");
     assert_eq!(weight["weight_kg"].as_f64(), Some(4.35));
-    assert_eq!(weight["note"].as_str(), Some("post-breakfast"));
+    assert_eq!(weight["note"].as_str(), Some("#manual post-breakfast"));
     assert_eq!(weight["measured_at"].as_str(), Some(occurred_at));
     assert_eq!(weight["local_date"].as_str(), Some("2026-06-01"));
 
@@ -2665,6 +2666,177 @@ async fn weight_summary_raw_returns_one_bucket_per_record() {
     );
     assert_eq!(buckets[0]["count"].as_i64(), Some(1));
     assert_eq!(buckets[0]["avg_kg"].as_f64(), Some(4.1));
+}
+
+#[actix_web::test]
+async fn weight_create_normalizes_note_tags() {
+    let (app, _state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "WeightNoteTags");
+
+    let cases = [
+        (serde_json::Value::Null, "#manual"),
+        (
+            serde_json::json!("Morning weigh-in"),
+            "#manual Morning weigh-in",
+        ),
+        (serde_json::json!("Petkit toileting"), "#Petkit toileting"),
+        (serde_json::json!("#vet after meal"), "#vet after meal"),
+    ];
+    for (i, (note, expected)) in cases.iter().enumerate() {
+        let mut body = serde_json::json!({
+            "pet_id": pet_id,
+            "measured_at": format!("2026-06-15T{:02}:00:00", i),
+            "weight_kg": 4.2,
+        });
+        if !note.is_null() {
+            body["note"] = note.clone();
+        }
+        let req = test::TestRequest::post()
+            .uri("/api/v1/health/weight")
+            .set_json(&body)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+        let created: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(created["note"].as_str(), Some(*expected), "note {note}");
+    }
+}
+
+#[actix_web::test]
+async fn weight_patch_updates_note() {
+    let (app, _state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "WeightPatchNote");
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/health/weight")
+        .set_json(serde_json::json!({
+            "pet_id": pet_id,
+            "measured_at": "2026-06-15T09:00:00",
+            "weight_kg": 4.2,
+            "note": "Morning weigh-in"
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 201);
+    let created: serde_json::Value = test::read_body_json(resp).await;
+    let id = created["id"].as_str().unwrap();
+    assert_eq!(created["note"].as_str(), Some("#manual Morning weigh-in"));
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/api/v1/health/weight/{id}"))
+        .set_json(serde_json::json!({ "note": "Petkit toileting" }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let updated: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(updated["note"].as_str(), Some("#Petkit toileting"));
+}
+
+#[actix_web::test]
+async fn weight_note_tag_migration_rewrites_existing_notes() {
+    let (app, state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "MigrateNotes");
+
+    let pet_uuid = uuid::Uuid::parse_str(&pet_id).unwrap();
+
+    sqlx::query(
+        "INSERT INTO weight_records (id, pet_id, measured_at, local_date, weight_kg, note, source_type, created_at)
+         VALUES
+           ('w-petkit', ?, '2026-06-01T09:00:00', '2026-06-01', 4.2, 'Petkit toileting', 'manual', '2026-06-01T09:00:00'),
+           ('w-plain', ?, '2026-06-01T10:00:00', '2026-06-01', 4.1, 'Morning weigh-in', 'manual', '2026-06-01T10:00:00'),
+           ('w-empty', ?, '2026-06-01T11:00:00', '2026-06-01', 4.0, NULL, 'manual', '2026-06-01T11:00:00')",
+    )
+    .bind(pet_uuid)
+    .bind(pet_uuid)
+    .bind(pet_uuid)
+    .execute(&state.pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "UPDATE weight_records SET note = replace(note, 'Petkit', '#Petkit')
+         WHERE note IS NOT NULL AND instr(note, 'Petkit') > 0 AND instr(note, '#Petkit') = 0",
+    )
+    .execute(&state.pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE weight_records SET note = '#manual' WHERE note IS NULL OR trim(note) = ''")
+        .execute(&state.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE weight_records SET note = '#manual ' || note WHERE note NOT LIKE '%#%'")
+        .execute(&state.pool)
+        .await
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/v1/health/weight?pet_id={pet_id}&date_from=2026-06-01&date_to=2026-06-01"
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let list: serde_json::Value = test::read_body_json(resp).await;
+    let notes: Vec<&str> = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["note"].as_str().unwrap())
+        .collect();
+    assert!(notes.contains(&"#Petkit toileting"));
+    assert!(notes.contains(&"#manual Morning weigh-in"));
+    assert!(notes.contains(&"#manual"));
+}
+
+#[actix_web::test]
+async fn weight_summary_group_by_tag_splits_series() {
+    let (app, _state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "SummaryByTag");
+
+    for (time, kg, note) in [
+        ("09:00:00", 4.2_f64, "#Petkit morning"),
+        ("12:00:00", 4.4_f64, "#Petkit noon"),
+        ("18:00:00", 4.3_f64, "hand scale"),
+    ] {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/health/weight")
+            .set_json(serde_json::json!({
+                "pet_id": pet_id,
+                "measured_at": format!("2026-06-15T{time}"),
+                "weight_kg": kg,
+                "note": note,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+    }
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/v1/health/weight/summary?pet_id={pet_id}&date_from=2026-06-15&date_to=2026-06-15&granularity=daily&group_by=tag"
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    let buckets = body.as_array().expect("expected array");
+    assert_eq!(buckets.len(), 2);
+    let petkit = buckets
+        .iter()
+        .find(|b| b["tag"].as_str() == Some("Petkit"))
+        .expect("Petkit series");
+    let manual = buckets
+        .iter()
+        .find(|b| b["tag"].as_str() == Some("manual"))
+        .expect("manual series");
+    assert_eq!(petkit["count"].as_i64(), Some(2));
+    let avg = petkit["avg_kg"].as_f64().unwrap();
+    assert!(
+        (avg - 4.3).abs() < 0.001,
+        "petkit avg should be 4.3, got {avg}"
+    );
+    assert_eq!(manual["count"].as_i64(), Some(1));
+    assert_eq!(manual["avg_kg"].as_f64(), Some(4.3));
 }
 
 // ── Health state records ────────────────────────────────────────────────────

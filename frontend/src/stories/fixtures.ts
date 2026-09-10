@@ -515,28 +515,39 @@ export const mockNotifications: NotificationItem[] = [
 export const mockWeightRecords: WeightRecord[] = [
   {
     id: 'wt-01', pet_id: mockPetId, measured_at: '2024-06-01T09:00:00', local_date: '2024-06-01',
-    weight_kg: 4.2, note: 'Morning weigh-in', source_type: 'manual',
+    weight_kg: 4.2, note: '#manual Morning weigh-in', source_type: 'manual',
     created_at: '2024-06-01T09:00:00',
   },
   {
     id: 'wt-02', pet_id: mockPetId, measured_at: '2024-06-08T09:00:00', local_date: '2024-06-08',
-    weight_kg: 4.15, note: null, source_type: 'manual',
+    weight_kg: 4.15, note: '#manual', source_type: 'manual',
     created_at: '2024-06-08T09:00:00',
   },
   {
     id: 'wt-03', pet_id: mockPetId, measured_at: '2024-06-15T09:00:00', local_date: '2024-06-15',
-    weight_kg: 4.18, note: 'Post vet visit', source_type: 'manual',
+    weight_kg: 4.18, note: '#manual Post vet visit', source_type: 'manual',
     created_at: '2024-06-15T09:00:00',
   },
   {
     id: 'wt-04', pet_id: mockPetId, measured_at: '2024-06-15T17:30:00', local_date: '2024-06-15',
-    weight_kg: 4.22, note: 'Evening weigh-in', source_type: 'manual',
+    weight_kg: 4.22, note: '#Petkit toileting', source_type: 'manual',
     created_at: '2024-06-15T17:30:00',
+  },
+  {
+    id: 'wt-05', pet_id: mockPetId, measured_at: '2024-06-15T13:17:00', local_date: '2024-06-15',
+    weight_kg: 4.73, note: '#Petkit toileting', source_type: 'manual',
+    created_at: '2024-06-15T13:17:00',
+  },
+  {
+    id: 'wt-06', pet_id: mockPetId, measured_at: '2024-06-15T09:51:00', local_date: '2024-06-15',
+    weight_kg: 4.72, note: '#Petkit toileting', source_type: 'manual',
+    created_at: '2024-06-15T09:51:00',
   },
 ];
 
 export const mockWeightSummaryRaw: WeightSummaryBucket[] = mockWeightRecords.map((r) => ({
   bucket: r.measured_at,
+  tag: r.note?.startsWith('#Petkit') ? 'Petkit' : 'manual',
   avg_kg: r.weight_kg,
   min_kg: r.weight_kg,
   max_kg: r.weight_kg,
@@ -544,24 +555,39 @@ export const mockWeightSummaryRaw: WeightSummaryBucket[] = mockWeightRecords.map
 }));
 
 export const mockWeightSummaryDaily: WeightSummaryBucket[] = [
-  { bucket: '2024-06-01', avg_kg: 4.2,  min_kg: 4.2,  max_kg: 4.2,  count: 1 },
-  { bucket: '2024-06-08', avg_kg: 4.15, min_kg: 4.15, max_kg: 4.15, count: 1 },
-  { bucket: '2024-06-15', avg_kg: 4.20, min_kg: 4.18, max_kg: 4.22, count: 2 },
+  { bucket: '2024-06-01', tag: 'manual', avg_kg: 4.2,  min_kg: 4.2,  max_kg: 4.2,  count: 1 },
+  { bucket: '2024-06-08', tag: 'manual', avg_kg: 4.15, min_kg: 4.15, max_kg: 4.15, count: 1 },
+  { bucket: '2024-06-15', tag: 'manual', avg_kg: 4.18, min_kg: 4.18, max_kg: 4.18, count: 1 },
+  { bucket: '2024-06-15', tag: 'Petkit', avg_kg: 4.22, min_kg: 4.22, max_kg: 4.22, count: 1 },
 ];
 
 export const mockWeightSummaryWeekly: WeightSummaryBucket[] = [
-  { bucket: '2024-04-01', avg_kg: 4.30, min_kg: 4.28, max_kg: 4.32, count: 2 },
-  { bucket: '2024-04-08', avg_kg: 4.27, min_kg: 4.25, max_kg: 4.29, count: 2 },
-  { bucket: '2024-04-15', avg_kg: 4.24, min_kg: 4.22, max_kg: 4.26, count: 2 },
-  { bucket: '2024-04-22', avg_kg: 4.21, min_kg: 4.19, max_kg: 4.23, count: 2 },
-  { bucket: '2024-04-29', avg_kg: 4.19, min_kg: 4.17, max_kg: 4.21, count: 3 },
-  { bucket: '2024-05-06', avg_kg: 4.20, min_kg: 4.18, max_kg: 4.22, count: 2 },
-  { bucket: '2024-05-13', avg_kg: 4.18, min_kg: 4.16, max_kg: 4.20, count: 2 },
-  { bucket: '2024-05-20', avg_kg: 4.19, min_kg: 4.17, max_kg: 4.21, count: 2 },
-  { bucket: '2024-05-27', avg_kg: 4.20, min_kg: 4.18, max_kg: 4.22, count: 2 },
-  { bucket: '2024-06-03', avg_kg: 4.15, min_kg: 4.15, max_kg: 4.15, count: 1 },
-  { bucket: '2024-06-10', avg_kg: 4.20, min_kg: 4.18, max_kg: 4.22, count: 2 },
+  { bucket: '2024-04-01', tag: 'manual', avg_kg: 4.30, min_kg: 4.28, max_kg: 4.32, count: 2 },
+  { bucket: '2024-04-08', tag: 'manual', avg_kg: 4.27, min_kg: 4.25, max_kg: 4.29, count: 2 },
+  { bucket: '2024-04-15', tag: 'manual', avg_kg: 4.24, min_kg: 4.22, max_kg: 4.26, count: 2 },
+  { bucket: '2024-04-22', tag: 'manual', avg_kg: 4.21, min_kg: 4.19, max_kg: 4.23, count: 2 },
+  { bucket: '2024-04-29', tag: 'manual', avg_kg: 4.19, min_kg: 4.17, max_kg: 4.21, count: 3 },
+  { bucket: '2024-05-06', tag: 'Petkit', avg_kg: 4.20, min_kg: 4.18, max_kg: 4.22, count: 12 },
+  { bucket: '2024-05-13', tag: 'Petkit', avg_kg: 4.18, min_kg: 4.16, max_kg: 4.20, count: 14 },
+  { bucket: '2024-05-20', tag: 'Petkit', avg_kg: 4.19, min_kg: 4.17, max_kg: 4.21, count: 11 },
+  { bucket: '2024-05-27', tag: 'Petkit', avg_kg: 4.20, min_kg: 4.18, max_kg: 4.22, count: 13 },
+  { bucket: '2024-06-03', tag: 'manual', avg_kg: 4.15, min_kg: 4.15, max_kg: 4.15, count: 1 },
+  { bucket: '2024-06-10', tag: 'Petkit', avg_kg: 4.20, min_kg: 4.18, max_kg: 4.22, count: 10 },
 ];
+
+/** 30 daily buckets with ~6 Petkit readings/day plus occasional manual — matches dense scale data. */
+export const mockWeightSummaryDenseDaily: WeightSummaryBucket[] = Array.from({ length: 30 }, (_, i) => {
+  const day = 15 - i;
+  const bucket = day > 0 ? `2024-06-${String(day).padStart(2, '0')}` : `2024-05-${String(31 + day).padStart(2, '0')}`;
+  const avg = 4.6 + (i % 7) * 0.02;
+  const rows: WeightSummaryBucket[] = [
+    { bucket, tag: 'Petkit', avg_kg: avg, min_kg: avg - 0.06, max_kg: avg + 0.08, count: 6 },
+  ];
+  if (i % 5 === 0) {
+    rows.push({ bucket, tag: 'manual', avg_kg: avg - 0.04, min_kg: avg - 0.04, max_kg: avg - 0.04, count: 1 });
+  }
+  return rows;
+}).flat();
 
 // ── Health state fixtures ─────────────────────────────────────────────────────
 

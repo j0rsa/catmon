@@ -87,7 +87,7 @@ pub async fn summary(
                     date_to: Some(date_to.to_string()),
                     limit: None,
                     offset: None,
-                    exclude_tags: None,
+                    tags: None,
                 },
             )
             .await?;

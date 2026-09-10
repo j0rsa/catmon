@@ -2841,7 +2841,7 @@ async fn weight_summary_group_by_tag_splits_series() {
 }
 
 #[actix_web::test]
-async fn weight_tags_and_exclude_filter() {
+async fn weight_tags_and_include_filter() {
     let (app, _state) = build_dev_app!();
     let pet_id = api_create_pet!(&app, "WeightTagFilter");
 
@@ -2883,7 +2883,7 @@ async fn weight_tags_and_exclude_filter() {
 
     let req = test::TestRequest::get()
         .uri(&format!(
-            "/api/v1/health/weight?pet_id={pet_id}&exclude_tags=Petkit"
+            "/api/v1/health/weight?pet_id={pet_id}&tags=Petkit"
         ))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -2895,10 +2895,8 @@ async fn weight_tags_and_exclude_filter() {
         .iter()
         .map(|r| r["note"].as_str().unwrap())
         .collect();
-    assert_eq!(notes.len(), 2);
-    assert!(notes.iter().all(|n| !n.contains("#Petkit")));
-    assert!(notes.iter().any(|n| n.contains("#manual")));
-    assert!(notes.iter().any(|n| n.contains("#vet")));
+    assert_eq!(notes.len(), 3);
+    assert!(notes.iter().all(|n| n.contains("#Petkit")));
 }
 
 // ── Health state records ────────────────────────────────────────────────────

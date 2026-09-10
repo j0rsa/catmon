@@ -1,5 +1,5 @@
 use crate::domain::weight::{
-    collect_tag_counts, normalize_weight_note, note_has_any_tag, parse_exclude_tags,
+    collect_tag_counts, normalize_weight_note, note_has_any_tag, parse_tag_filter,
     CreateWeightRecord, UpdateWeightRecord, WeightRecord, WeightRecordFilters, WeightStats,
     WeightTagCount,
 };
@@ -16,7 +16,7 @@ pub async fn list(
     pool: &SqlitePool,
     filters: &WeightRecordFilters,
 ) -> AppResult<Vec<WeightRecord>> {
-    let exclude = parse_exclude_tags(filters.exclude_tags.as_deref());
+    let include = parse_tag_filter(filters.tags.as_deref());
     let has_date_range = filters.date_from.is_some() || filters.date_to.is_some();
     let page_limit = filters.limit.or(if has_date_range {
         None
@@ -25,17 +25,17 @@ pub async fn list(
     });
 
     let mut effective = filters.clone();
-    if exclude.is_empty() {
+    if include.is_empty() {
         effective.limit = page_limit;
     } else {
-        // Fetch the full candidate set, hide excluded tags, then page.
+        // Fetch the full candidate set, keep matching tags, then page.
         effective.limit = None;
         effective.offset = None;
     }
 
     let mut records = list_sql(pool, &effective).await?;
-    if !exclude.is_empty() {
-        records.retain(|record| !note_has_any_tag(record.note.as_deref(), &exclude));
+    if !include.is_empty() {
+        records.retain(|record| note_has_any_tag(record.note.as_deref(), &include));
         let offset = filters.offset.unwrap_or(0).max(0) as usize;
         if offset > 0 {
             records = records.into_iter().skip(offset).collect();

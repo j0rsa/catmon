@@ -26,7 +26,7 @@ export interface WeightRecordFilters {
   date_to?: string;
   limit?: number;
   offset?: number;
-  exclude_tags?: string[];
+  tags?: string[];
 }
 
 export interface WeightTagCount {
@@ -79,11 +79,11 @@ export interface UpdateWeightRecord {
 
 export const weightApi = {
   list: (filters: WeightRecordFilters = {}) => {
-    const { exclude_tags, ...rest } = filters;
+    const { tags, ...rest } = filters;
     return api.get<WeightRecord[]>(
       `/health/weight${toQueryString({
         ...(rest as Record<string, string | number | undefined>),
-        exclude_tags: exclude_tags && exclude_tags.length > 0 ? exclude_tags.join(',') : undefined,
+        tags: tags && tags.length > 0 ? tags.join(',') : undefined,
       })}`,
     );
   },

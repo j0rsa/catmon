@@ -17,7 +17,7 @@ const meta = {
   parameters: { layout: 'padded' },
   args: {
     tags,
-    excluded: [],
+    selected: [],
     onChange: fn(),
   },
   decorators: [
@@ -33,13 +33,13 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 function FilterPlayground(args: ComponentProps<typeof WeightRecordTagFilter>) {
-  const [excluded, setExcluded] = useState<string[]>(args.excluded);
-  return <WeightRecordTagFilter {...args} excluded={excluded} onChange={setExcluded} />;
+  const [selected, setSelected] = useState<string[]>(args.selected);
+  return <WeightRecordTagFilter {...args} selected={selected} onChange={setSelected} />;
 }
 
 export const Closed: Story = {};
 
-export const HidesSelectedTags: Story = {
+export const ShowsSelectedTags: Story = {
   render: FilterPlayground,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -47,14 +47,14 @@ export const HidesSelectedTags: Story = {
     await userEvent.click(filter);
     const dialog = canvas.getByRole('dialog', { name: 'Filter weight records' });
     await expect(dialog).toBeVisible();
-    await expect(canvas.getByRole('checkbox', { name: 'Hide #Petkit' })).toBeInTheDocument();
-    await expect(canvas.getByRole('checkbox', { name: 'Hide #manual' })).toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('checkbox', { name: 'Hide #Petkit' }));
-    await expect(canvas.getByRole('checkbox', { name: 'Hide #Petkit' })).toBeChecked();
+    await expect(canvas.getByRole('checkbox', { name: 'Show #Petkit' })).toBeInTheDocument();
+    await expect(canvas.getByRole('checkbox', { name: 'Show #manual' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('checkbox', { name: 'Show #Petkit' }));
+    await expect(canvas.getByRole('checkbox', { name: 'Show #Petkit' })).toBeChecked();
     await expect(filter).toHaveTextContent('1');
     assertPopoverFitsFrame(canvasElement, dialog);
     assertFitsNarrowViewport(canvasElement);
   },
 };
 
-export const HidesSelectedTagsNarrow = asNarrowStory(HidesSelectedTags);
+export const ShowsSelectedTagsNarrow = asNarrowStory(ShowsSelectedTags);

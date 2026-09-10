@@ -69,7 +69,7 @@ export const WithWeightHistoryNarrow = asNarrowStory(WithWeightHistory);
 export const DenseHistoryNarrow = asNarrowStory(DenseHistory);
 export const EditNoteNarrow = asNarrowStory(EditNote);
 
-export const FilterHidesTag: Story = {
+export const FilterShowsTag: Story = {
   decorators: [withHealthPage()],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -79,14 +79,14 @@ export const FilterHidesTag: Story = {
     await userEvent.click(records.getByRole('button', { name: 'Filter weight records' }));
     const dialog = records.getByRole('dialog', { name: 'Filter weight records' });
     await expect(dialog).toBeVisible();
-    await userEvent.click(records.getByRole('checkbox', { name: 'Hide #Petkit' }));
+    await userEvent.click(records.getByRole('checkbox', { name: 'Show #Petkit' }));
     const list = (panel as HTMLElement).querySelector('.weight-record-list');
     await expect(list).toBeTruthy();
-    await expect(within(list as HTMLElement).queryByText('#Petkit')).not.toBeInTheDocument();
-    await expect(within(list as HTMLElement).getAllByText('#manual').length).toBeGreaterThan(0);
+    await expect(within(list as HTMLElement).getAllByText('#Petkit').length).toBeGreaterThan(0);
+    await expect(within(list as HTMLElement).queryByText('#manual')).not.toBeInTheDocument();
     assertPopoverFitsFrame(canvasElement, dialog);
     assertFitsNarrowViewport(canvasElement);
   },
 };
 
-export const FilterHidesTagNarrow = asNarrowStory(FilterHidesTag);
+export const FilterShowsTagNarrow = asNarrowStory(FilterShowsTag);

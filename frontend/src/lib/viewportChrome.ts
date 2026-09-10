@@ -2,20 +2,37 @@
 export const VIEWPORT_SHIFT_BOTTOM_VAR = '--viewport-shift-bottom';
 
 const POST_AUTH_SYNC_KEY = 'pwa-post-auth-viewport-sync';
+const RESIZE_DEBOUNCE_MS = 200;
 
-/** Distance the fixed bottom nav must shift down to meet the visual viewport bottom. */
-export function computeViewportShiftBottom(navBottom: number | null, visualViewport = window.visualViewport): number {
-  if (!visualViewport) return 0;
-  const visualBottom = visualViewport.offsetTop + visualViewport.height;
-  const referenceBottom = navBottom ?? window.innerHeight;
-  return Math.max(0, Math.round(visualBottom - referenceBottom));
+/** Last shift written to the DOM — held steady during rubber-band pans. */
+let lastStableShift = 0;
+
+export interface ViewportShiftInput {
+  visualViewport?: VisualViewport | null;
+  innerHeight?: number;
+  previousShift?: number;
+}
+
+/**
+ * Distance fixed bottom chrome must shift down so the layout viewport bottom
+ * meets the visual viewport bottom. Uses layout metrics only (never the nav's
+ * transformed bounding rect) to avoid a feedback loop that flickers on scroll.
+ */
+export function computeViewportShiftBottom(input: ViewportShiftInput = {}): number {
+  const vv = input.visualViewport ?? window.visualViewport;
+  if (!vv) return input.previousShift ?? lastStableShift;
+
+  const layoutBottom = input.innerHeight ?? window.innerHeight;
+  const visualBottom = vv.offsetTop + vv.height;
+  return Math.max(0, Math.round(visualBottom - layoutBottom));
 }
 
 /** Re-anchor fixed chrome against the visual viewport (iOS PWA after OIDC redirects). */
-export function syncViewportChrome(nav: HTMLElement | null = document.querySelector<HTMLElement>('.bottom-nav')): number {
-  const visible = nav && getComputedStyle(nav).display !== 'none';
-  const navBottom = visible ? nav.getBoundingClientRect().bottom : null;
-  const shift = computeViewportShiftBottom(navBottom);
+export function syncViewportChrome(): number {
+  const shift = computeViewportShiftBottom();
+  if (shift === lastStableShift) return shift;
+
+  lastStableShift = shift;
   document.documentElement.style.setProperty(VIEWPORT_SHIFT_BOTTOM_VAR, `${shift}px`);
   return shift;
 }
@@ -57,23 +74,34 @@ export function runViewportSyncBurst(sync: () => void = syncViewportChrome): voi
 }
 
 export function installViewportChromeSync(options?: { burst?: boolean }): () => void {
-  const sync = () => syncViewportChrome();
+  let resizeTimer: number | undefined;
+  const debouncedSync = () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => syncViewportChrome(), RESIZE_DEBOUNCE_MS);
+  };
 
-  window.visualViewport?.addEventListener('resize', sync);
-  window.visualViewport?.addEventListener('scroll', sync);
-  window.addEventListener('resize', sync);
-  window.addEventListener('orientationchange', sync);
-  window.addEventListener('pageshow', sync);
+  // Do not listen to visualViewport scroll — rubber-band overscroll fires it every
+  // frame and toggled shift values made the bottom nav flicker.
+  window.visualViewport?.addEventListener('resize', debouncedSync);
+  window.addEventListener('resize', debouncedSync);
+  window.addEventListener('orientationchange', syncViewportChrome);
+  window.addEventListener('pageshow', syncViewportChrome);
 
-  sync();
-  if (options?.burst) runViewportSyncBurst(sync);
+  syncViewportChrome();
+  if (options?.burst) runViewportSyncBurst();
 
   return () => {
-    window.visualViewport?.removeEventListener('resize', sync);
-    window.visualViewport?.removeEventListener('scroll', sync);
-    window.removeEventListener('resize', sync);
-    window.removeEventListener('orientationchange', sync);
-    window.removeEventListener('pageshow', sync);
+    window.clearTimeout(resizeTimer);
+    window.visualViewport?.removeEventListener('resize', debouncedSync);
+    window.removeEventListener('resize', debouncedSync);
+    window.removeEventListener('orientationchange', syncViewportChrome);
+    window.removeEventListener('pageshow', syncViewportChrome);
+    lastStableShift = 0;
     document.documentElement.style.removeProperty(VIEWPORT_SHIFT_BOTTOM_VAR);
   };
+}
+
+/** Test helper — reset module state between unit tests. */
+export function resetViewportChromeStateForTests(): void {
+  lastStableShift = 0;
 }

@@ -97,7 +97,7 @@ Rules:
 
 Regression cover lives in `Layout.stories.tsx` / `DemoBanner.stories.tsx`: `assertShellSpansOneViewport`, `assertBottomNavPinned`, `assertTextClearsTopInset`.
 
-**OIDC / iOS PWA viewport reset:** After an OIDC redirect, iOS can leave the layout viewport shorter than the visual viewport so `position: fixed; bottom: 0` sits above the home indicator. A plain reload is not enough. `frontend/src/lib/viewportChrome.ts` compares the visual viewport to the bottom nav and writes `--viewport-shift-bottom`; `AuthCallbackPage` sets a session flag and `Layout` runs an aggressive re-sync burst on the next mount. Listeners on `visualViewport` keep the shift updated.
+**OIDC / iOS PWA viewport reset:** After an OIDC redirect, iOS can leave the layout viewport shorter than the visual viewport so `position: fixed; bottom: 0` sits above the home indicator. A plain reload is not enough. `frontend/src/lib/viewportChrome.ts` compares `visualViewport` height to `window.innerHeight` (never the nav's transformed bounding rect — that caused flicker) and writes `--viewport-shift-bottom`; `AuthCallbackPage` sets a session flag and `Layout` runs an aggressive re-sync burst on the next mount. Only `resize` / `orientationchange` / `pageshow` update the shift — not `visualViewport` scroll, which fires during rubber-band overscroll.
 
 ### Locale-aware decimal inputs (iOS / EU keyboards)
 

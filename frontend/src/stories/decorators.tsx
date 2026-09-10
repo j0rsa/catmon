@@ -33,8 +33,8 @@ import {
   mockTelegramConfigured,
   mockTelegramEmpty,
   mockWeightRecords,
-  mockWeightSummaryRaw,
   mockWeightSummaryDaily,
+  mockWeightSummaryDenseDaily,
   mockWeightSummaryWeekly,
   mockHealthStateRecords,
   mockDailyMedAssignments,
@@ -445,9 +445,10 @@ interface WithHealthPageOptions {
   loading?: boolean;
   empty?: boolean;
   longHistory?: boolean;
+  dense?: boolean;
 }
 
-export function withHealthPage({ petId = mockPetId, loading = false, empty = false, longHistory = false }: WithHealthPageOptions = {}): Decorator {
+export function withHealthPage({ petId = mockPetId, loading = false, empty = false, longHistory = false, dense = false }: WithHealthPageOptions = {}): Decorator {
   return function HealthDecorator(Story) {
     const client = makeMockClient();
     client.setQueryData(['pets'], mockPets);
@@ -470,16 +471,17 @@ export function withHealthPage({ petId = mockPetId, loading = false, empty = fal
       );
 
       const todayStr = localToday();
-      const rawFrom = shiftDate(todayStr, -29);
+      const thirtyFrom = shiftDate(todayStr, -29);
       const dailyFrom = shiftDate(todayStr, -89);
       const yearFrom = shiftDate(todayStr, -364);
-      const summaryData = (buckets: typeof mockWeightSummaryRaw) =>
+      const summaryData = (buckets: typeof mockWeightSummaryDaily) =>
         empty ? [] : buckets.map((b) => ({ ...b }));
+      const thirtyDay = dense ? mockWeightSummaryDenseDaily : mockWeightSummaryDaily;
 
-      client.setQueryData(['weight-summary', rawFrom, todayStr, 'raw', petId], summaryData(mockWeightSummaryRaw));
-      client.setQueryData(['weight-summary', dailyFrom, todayStr, 'daily', petId], summaryData(mockWeightSummaryDaily));
-      client.setQueryData(['weight-summary', yearFrom, todayStr, 'weekly', petId], summaryData(longHistory ? mockWeightSummaryWeekly : mockWeightSummaryDaily));
-      client.setQueryData(['weight-summary', 'all', todayStr, 'weekly', petId], summaryData(mockWeightSummaryWeekly));
+      client.setQueryData(['weight-summary', thirtyFrom, todayStr, 'daily', 'tag', petId], summaryData(thirtyDay));
+      client.setQueryData(['weight-summary', dailyFrom, todayStr, 'daily', 'tag', petId], summaryData(mockWeightSummaryDaily));
+      client.setQueryData(['weight-summary', yearFrom, todayStr, 'weekly', 'tag', petId], summaryData(longHistory ? mockWeightSummaryWeekly : mockWeightSummaryDaily));
+      client.setQueryData(['weight-summary', 'all', todayStr, 'weekly', 'tag', petId], summaryData(mockWeightSummaryWeekly));
 
       client.setQueryData(
         ['health-state-records', petId],
@@ -487,7 +489,7 @@ export function withHealthPage({ petId = mockPetId, loading = false, empty = fal
       );
 
       const chartRecords = empty ? [] : mockHealthStateRecords.map((r) => ({ ...r, pet_id: petId }));
-      client.setQueryData(['health-state-chart', petId, rawFrom, todayStr, 'daily'], chartRecords);
+      client.setQueryData(['health-state-chart', petId, thirtyFrom, todayStr, 'daily'], chartRecords);
       client.setQueryData(['health-state-chart', petId, dailyFrom, todayStr, 'daily'], chartRecords);
       client.setQueryData(['health-state-chart', petId, yearFrom, todayStr, 'weekly'], chartRecords);
       client.setQueryData(['health-state-chart', petId, 'all', todayStr, 'weekly'], chartRecords);

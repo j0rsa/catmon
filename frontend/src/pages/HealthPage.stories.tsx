@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { withHealthPage } from '../stories/decorators';
+import { asNarrowStory } from '../stories/viewport';
 import HealthPage from './HealthPage';
 
 const meta = {
@@ -12,14 +14,26 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Full health page with weight history chart and records table. */
+/** Full health page with weight history chart and recent records. */
 export const WithWeightHistory: Story = {
   decorators: [withHealthPage()],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('heading', { name: 'History' })).toBeInTheDocument();
+    await expect(canvas.getByRole('heading', { name: 'Recent records' })).toBeInTheDocument();
+    await expect(canvas.getAllByRole('button', { name: 'Delete' }).length).toBeGreaterThan(0);
+    await expect(canvas.getAllByText('#Petkit').length).toBeGreaterThan(0);
+  },
 };
 
-/** Multiple weigh-ins on the same day — chart shows distinct X-axis points per measurement. */
-export const MultiplePerDay: Story = {
-  decorators: [withHealthPage()],
+/** Dense 30-day history: daily aggregation with Petkit vs manual series. */
+export const DenseHistory: Story = {
+  decorators: [withHealthPage({ dense: true })],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByText('#Petkit').length).toBeGreaterThan(0);
+    await expect(canvas.getAllByText('#manual').length).toBeGreaterThan(0);
+  },
 };
 
 /** Year of weekly-bucketed measurements — shows min/max range lines on the chart. */
@@ -36,3 +50,20 @@ export const Empty: Story = {
 export const Loading: Story = {
   decorators: [withHealthPage({ loading: true })],
 };
+
+export const EditNote: Story = {
+  decorators: [withHealthPage()],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const panel = canvas.getByRole('heading', { name: 'Recent records' }).closest('.panel');
+    await expect(panel).toBeTruthy();
+    const petkit = within(panel as HTMLElement).getAllByText('#Petkit')[0].closest('li');
+    await expect(petkit).toBeTruthy();
+    await userEvent.click(within(petkit as HTMLElement).getByRole('button', { name: 'Edit' }));
+    await expect(canvas.getByLabelText('Edit weight note')).toHaveValue('#Petkit toileting');
+  },
+};
+
+export const WithWeightHistoryNarrow = asNarrowStory(WithWeightHistory);
+export const DenseHistoryNarrow = asNarrowStory(DenseHistory);
+export const EditNoteNarrow = asNarrowStory(EditNote);

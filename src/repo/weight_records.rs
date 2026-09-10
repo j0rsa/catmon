@@ -1,4 +1,7 @@
-use crate::domain::weight::{CreateWeightRecord, WeightRecord, WeightRecordFilters, WeightStats};
+use crate::domain::weight::{
+    normalize_weight_note, CreateWeightRecord, UpdateWeightRecord, WeightRecord,
+    WeightRecordFilters, WeightStats,
+};
 use crate::error::{AppError, AppResult};
 use chrono::Utc;
 use chrono_tz::Tz;
@@ -97,6 +100,7 @@ pub async fn create(
     let source_type = req.source_type.unwrap_or_else(|| "manual".to_string());
     let pet_id = Uuid::parse_str(&req.pet_id)
         .map_err(|_| AppError::BadRequest(format!("invalid pet_id: {}", req.pet_id)))?;
+    let note = normalize_weight_note(req.note.as_deref());
 
     sqlx::query(
         "INSERT INTO weight_records (id, pet_id, measured_at, local_date, weight_kg, note, source_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -106,7 +110,7 @@ pub async fn create(
     .bind(&measured_at)
     .bind(&local_date)
     .bind(req.weight_kg)
-    .bind(&req.note)
+    .bind(&note)
     .bind(&source_type)
     .bind(&now)
     .execute(pool)
@@ -161,6 +165,24 @@ pub async fn stats(
     })
 }
 
+#[tracing::instrument(skip(pool, req))]
+pub async fn update(
+    pool: &SqlitePool,
+    id: &str,
+    req: UpdateWeightRecord,
+) -> AppResult<WeightRecord> {
+    let mut record = get(pool, id).await?;
+    if let Some(note) = req.note {
+        record.note = Some(normalize_weight_note(note.as_deref()));
+        sqlx::query("UPDATE weight_records SET note=? WHERE id=?")
+            .bind(&record.note)
+            .bind(id)
+            .execute(pool)
+            .await?;
+    }
+    get(pool, id).await
+}
+
 #[tracing::instrument(skip(pool))]
 pub async fn delete(pool: &SqlitePool, id: &str) -> AppResult<()> {
     let rows = sqlx::query("DELETE FROM weight_records WHERE id=?")
@@ -193,16 +215,16 @@ pub async fn summary(
 
     let sql = match granularity {
         WeightGranularity::Raw => format!(
-            "SELECT measured_at AS bucket, weight_kg AS avg_kg, weight_kg AS min_kg, weight_kg AS max_kg, CAST(1 AS INTEGER) AS count \
+            "SELECT measured_at AS bucket, CAST(NULL AS TEXT) AS tag, weight_kg AS avg_kg, weight_kg AS min_kg, weight_kg AS max_kg, CAST(1 AS INTEGER) AS count \
              FROM weight_records WHERE {conditions} ORDER BY measured_at ASC"
         ),
         WeightGranularity::Daily => format!(
-            "SELECT local_date AS bucket, AVG(weight_kg) AS avg_kg, MIN(weight_kg) AS min_kg, MAX(weight_kg) AS max_kg, CAST(COUNT(*) AS INTEGER) AS count \
+            "SELECT local_date AS bucket, CAST(NULL AS TEXT) AS tag, AVG(weight_kg) AS avg_kg, MIN(weight_kg) AS min_kg, MAX(weight_kg) AS max_kg, CAST(COUNT(*) AS INTEGER) AS count \
              FROM weight_records WHERE {conditions} GROUP BY local_date ORDER BY bucket ASC"
         ),
         WeightGranularity::Weekly => format!(
             "SELECT DATE(local_date, '-' || CAST(((CAST(strftime('%w', local_date) AS INTEGER) + 6) % 7) AS TEXT) || ' days') AS bucket, \
-             AVG(weight_kg) AS avg_kg, MIN(weight_kg) AS min_kg, MAX(weight_kg) AS max_kg, CAST(COUNT(*) AS INTEGER) AS count \
+             CAST(NULL AS TEXT) AS tag, AVG(weight_kg) AS avg_kg, MIN(weight_kg) AS min_kg, MAX(weight_kg) AS max_kg, CAST(COUNT(*) AS INTEGER) AS count \
              FROM weight_records WHERE {conditions} GROUP BY 1 ORDER BY 1 ASC"
         ),
     };

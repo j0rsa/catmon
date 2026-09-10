@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { weightApi } from '../api/weight';
 import { medicationsApi } from '../api/medications';
 import { parseDecimal } from '../lib/numbers';
@@ -8,45 +7,28 @@ import type { CreateWeightRecord, WeightGranularity } from '../api/weight';
 import { NoPetSelected } from '../components/NoPetSelected';
 import { HealthStatePanel } from '../components/health/HealthStatePanel';
 import { MedIntakePanel } from '../components/health/MedIntakePanel';
+import { WeightHistoryChart } from '../components/health/WeightHistoryChart';
+import { WeightRecordList } from '../components/health/WeightRecordList';
 import { useSelectedPet } from '../context/SelectedPetContext';
 import { localToday, shiftDate } from '../lib/dates';
 import { usePermissions } from '../context/usePermissions';
 import { useFormatDate, useFormatTime } from '../context/useDisplaySettings';
 import { useScrollToHash } from '../hooks/useScrollToHash';
-import { linReg } from '../lib/linReg';
 import { hasActiveAssignmentOn } from '../lib/medications';
 
 type PeriodLabel = '30d' | '90d' | '1y' | 'all';
 
 const WEIGHT_PERIODS: { label: PeriodLabel; days: number | null; granularity: WeightGranularity }[] = [
-  { label: '30d', days: 30,  granularity: 'raw'    },
+  { label: '30d', days: 30,  granularity: 'daily'  },
   { label: '90d', days: 90,  granularity: 'daily'  },
   { label: '1y',  days: 365, granularity: 'weekly' },
   { label: 'all', days: null, granularity: 'weekly' },
 ];
 
-function formatBucket(bucket: string, granularity: WeightGranularity): string {
-  if (granularity === 'raw') {
-    const dt = new Date(bucket);
-    return `${dt.getDate()} ${dt.toLocaleString('en', { month: 'short' })} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
-  }
-  const dt = new Date(`${bucket}T00:00:00`);
-  return `${dt.getDate()} ${dt.toLocaleString('en', { month: 'short' })}`;
-}
-
 function nowLocalDateTimeString(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-}
-
-function medianWeight(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
 }
 
 export default function HealthPage() {
@@ -62,12 +44,13 @@ export default function HealthPage() {
   const dateFrom = periodDays != null ? shiftDate(today, -(periodDays - 1)) : undefined;
 
   const summaryQuery = useQuery({
-    queryKey: ['weight-summary', dateFrom ?? 'all', today, granularity, selectedPetId],
+    queryKey: ['weight-summary', dateFrom ?? 'all', today, granularity, 'tag', selectedPetId],
     queryFn: () => weightApi.summary({
       pet_id: selectedPetId!,
       date_from: dateFrom,
       date_to: today,
       granularity,
+      group_by: 'tag',
     }),
     enabled: Boolean(selectedPetId),
     placeholderData: keepPreviousData,
@@ -89,44 +72,34 @@ export default function HealthPage() {
   const [noteInput, setNoteInput] = useState('');
   const [measuredAt, setMeasuredAt] = useState(() => nowLocalDateTimeString());
 
+  function invalidateWeightQueries() {
+    queryClient.invalidateQueries({ queryKey: ['weight-records', selectedPetId] });
+    queryClient.invalidateQueries({ queryKey: ['weight-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['pets', selectedPetId] });
+    queryClient.invalidateQueries({ queryKey: ['pets'] });
+  }
+
   const addMutation = useMutation({
     mutationFn: (payload: CreateWeightRecord) => weightApi.create(payload),
     onSuccess: () => {
       setWeightInput('');
       setNoteInput('');
       setMeasuredAt(nowLocalDateTimeString());
-      queryClient.invalidateQueries({ queryKey: ['weight-records', selectedPetId] });
-      queryClient.invalidateQueries({ queryKey: ['weight-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['pets', selectedPetId] });
-      queryClient.invalidateQueries({ queryKey: ['pets'] });
+      invalidateWeightQueries();
     },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) => weightApi.update(id, { note }),
+    onSuccess: invalidateWeightQueries,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => weightApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['weight-records', selectedPetId] });
-      queryClient.invalidateQueries({ queryKey: ['weight-summary'] });
-    },
+    onSuccess: invalidateWeightQueries,
   });
 
   useScrollToHash(summaryQuery.isPending);
-
-  const buckets = summaryQuery.data ?? [];
-  const trendValues = linReg(buckets.map((bucket) => bucket.avg_kg));
-  const chartData = buckets.map((bucket, index) => ({
-    bucket: formatBucket(bucket.bucket, granularity),
-    avgKg: bucket.avg_kg,
-    minKg: bucket.min_kg,
-    maxKg: bucket.max_kg,
-    trendKg: trendValues?.[index] ?? null,
-  }));
-
-  const hasWeightTrend = chartData.some((point) => point.trendKg != null);
-
-  const medianKg = medianWeight(
-    buckets.map((bucket) => bucket.avg_kg).filter((value): value is number => value != null),
-  );
 
   if (petsLoading) return <div className="loading-state">Loading…</div>;
   if (!selectedPetId) return <NoPetSelected />;
@@ -168,7 +141,6 @@ export default function HealthPage() {
 
       <HealthStatePanel petId={selectedPetId} />
 
-      {/* Weight chart */}
       <section className="panel" id="weight">
         <div className="section-heading">
           <div>
@@ -177,7 +149,6 @@ export default function HealthPage() {
           </div>
         </div>
 
-        {/* Period selector */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
           {WEIGHT_PERIODS.map((p) => (
             <button
@@ -194,97 +165,14 @@ export default function HealthPage() {
 
         {summaryQuery.isPending ? (
           <div className="loading-state" style={{ minHeight: 200 }}>Loading…</div>
-        ) : chartData.length >= 2 ? (
-          <div style={{ position: 'relative', minHeight: 200 }}>
-            {summaryQuery.isFetching && (
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'color-mix(in srgb, var(--surface) 70%, transparent)',
-                  zIndex: 1,
-                  fontSize: '0.82rem',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                Loading…
-              </div>
-            )}
-          <ResponsiveContainer width="100%" height={200}>
-            <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-              <XAxis dataKey="bucket" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} domain={['auto', 'auto']} />
-              <Tooltip
-                contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, fontSize: 12 }}
-                content={({ active, payload, label }) => {
-                  if (!active || !payload?.length) return null;
-                  const weightEntry = payload.find((entry) => entry.dataKey === 'avgKg');
-                  const minEntry = payload.find((entry) => entry.dataKey === 'minKg');
-                  const maxEntry = payload.find((entry) => entry.dataKey === 'maxKg');
-                  const weightLabel = granularity === 'raw' ? 'Weight' : 'Avg';
-                  return (
-                    <div
-                      style={{
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 8,
-                        fontSize: 12,
-                        padding: '0.5rem 0.75rem',
-                      }}
-                    >
-                      <p style={{ margin: '0 0 4px', color: 'var(--text-muted)' }}>{label}</p>
-                      {weightEntry && (
-                        <p style={{ margin: 0 }}>
-                          {weightLabel}: {Number(weightEntry.value).toFixed(2)} kg
-                        </p>
-                      )}
-                      {medianKg != null && (
-                        <p style={{ margin: 0 }}>Median weight: {medianKg.toFixed(2)} kg</p>
-                      )}
-                      {minEntry && (
-                        <p style={{ margin: 0 }}>Min: {Number(minEntry.value).toFixed(2)} kg</p>
-                      )}
-                      {maxEntry && (
-                        <p style={{ margin: 0 }}>Max: {Number(maxEntry.value).toFixed(2)} kg</p>
-                      )}
-                    </div>
-                  );
-                }}
-              />
-              {granularity !== 'raw' && (
-                <>
-                  <Line type="monotone" dataKey="minKg" name="Min" stroke="var(--accent)" strokeWidth={1} strokeDasharray="3 2" dot={false} strokeOpacity={0.35} legendType="none" />
-                  <Line type="monotone" dataKey="maxKg" name="Max" stroke="var(--accent)" strokeWidth={1} strokeDasharray="3 2" dot={false} strokeOpacity={0.35} legendType="none" />
-                </>
-              )}
-              <Line type="monotone" dataKey="avgKg" name={granularity === 'raw' ? 'Weight' : 'Avg'} stroke="var(--accent)" strokeWidth={2} dot={{ r: 3 }} />
-              {hasWeightTrend && (
-                <Line
-                  type="linear"
-                  dataKey="trendKg"
-                  name="trendKg"
-                  stroke="var(--text-muted)"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                  dot={false}
-                  activeDot={false}
-                  legendType="none"
-                />
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
-          </div>
         ) : (
-          <p className="muted-text" style={{ fontSize: '0.88rem' }}>
-            {chartData.length === 0 ? 'No measurements yet.' : 'Add at least 2 measurements to see a chart.'}
-          </p>
+          <WeightHistoryChart
+            buckets={summaryQuery.data ?? []}
+            granularity={granularity}
+            isFetching={summaryQuery.isFetching}
+          />
         )}
 
-        {/* Log weight */}
         {canWrite && <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div className="form-row" style={{ flex: '0 0 auto' }}>
             <label style={{ fontSize: '0.82rem' }}>Date &amp; time</label>
@@ -311,7 +199,7 @@ export default function HealthPage() {
             <label style={{ fontSize: '0.82rem' }}>Note (optional)</label>
             <input
               type="text"
-              placeholder="After meal, vet, etc."
+              placeholder="#Petkit after meal"
               value={noteInput}
               onChange={(e) => setNoteInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
@@ -329,7 +217,6 @@ export default function HealthPage() {
         </div>}
       </section>
 
-      {/* Records table */}
       {records.length > 0 && (
         <section className="panel">
           <div className="section-heading">
@@ -339,40 +226,15 @@ export default function HealthPage() {
             </div>
             <span className="muted-text" style={{ fontSize: '0.82rem' }}>Last {records.length}</span>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Weight</th>
-                <th>Note</th>
-                {canWrite && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((r) => (
-                <tr key={r.id}>
-                  <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{formatRecordWhen(r.measured_at, r.local_date)}</td>
-                  <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{r.weight_kg} kg</td>
-                  <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                    {r.note ?? <span style={{ color: 'var(--text-subtle)' }}>—</span>}
-                  </td>
-                  {canWrite && (
-                    <td>
-                      <button
-                        className="button button-danger"
-                        type="button"
-                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
-                        disabled={deleteMutation.isPending && deleteMutation.variables === r.id}
-                        onClick={() => { if (window.confirm('Delete this weight entry?')) deleteMutation.mutate(r.id); }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <WeightRecordList
+            records={records}
+            canWrite={canWrite}
+            formatWhen={(record) => formatRecordWhen(record.measured_at, record.local_date)}
+            updatingId={updateMutation.isPending ? updateMutation.variables?.id : undefined}
+            deletingId={deleteMutation.isPending ? deleteMutation.variables : undefined}
+            onUpdateNote={(id, note) => updateMutation.mutate({ id, note })}
+            onDelete={(id) => deleteMutation.mutate(id)}
+          />
         </section>
       )}
     </div>

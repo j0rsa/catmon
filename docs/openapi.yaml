@@ -1361,9 +1361,10 @@ paths:
       x-required-scope: api_read
       description: |
         Returns weight records bucketed by granularity. Use this for charts with large datasets.
-        - `raw`: one bucket per individual measurement (for short windows, ≤30d)
-        - `daily`: one bucket per calendar day with avg/min/max (for medium windows, ≤90d)
+        - `raw`: one bucket per individual measurement (for very short windows)
+        - `daily`: one bucket per calendar day with avg/min/max (for ≤90d, including 30d)
         - `weekly`: one bucket per week (Monday-aligned) with avg/min/max (for long windows)
+        Pass `group_by=tag` to emit one series per first hashtag in the note (`manual` when none).
       parameters:
         - name: pet_id
           in: query
@@ -1381,6 +1382,11 @@ paths:
           in: query
           required: false
           schema: { type: string, enum: [raw, daily, weekly], default: daily }
+        - name: group_by
+          in: query
+          required: false
+          description: Split buckets by the first hashtag in each note (`#manual` if the note has none).
+          schema: { type: string, enum: [none, tag], default: none }
       responses:
         '200':
           description: List of weight summary buckets
@@ -1398,6 +1404,40 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   /health/weight/{id}:
+    patch:
+      tags:
+        - Weight Records
+      summary: Update a weight record note
+      x-required-scope: api_write
+      description: |
+        Updates the note. Notes always store at least one hashtag — a missing tag
+        becomes `#manual`, and a bare `Petkit` word becomes `#Petkit`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWeightRecord'
+      responses:
+        '200':
+          description: Weight record updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeightRecord'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
     delete:
       tags:
         - Weight Records
@@ -4016,7 +4056,7 @@ components:
         weight_note:
           type: string
           nullable: true
-          description: Note for the weight record
+          description: Note for the weight record (normalized like other weight notes; untagged text gets `#manual`)
       required:
         - pet_id
         - weight_kg
@@ -4344,6 +4384,9 @@ components:
         note:
           type: string
           nullable: true
+          description: |
+            Free-text note. Hashtags (`#Petkit`, `#manual`) split the history chart
+            into series. Untagged notes are stored with `#manual` prepended.
         source_type:
           type: string
         created_at:
@@ -4378,12 +4421,21 @@ components:
         note:
           type: string
           nullable: true
+          description: Untagged text is stored with `#manual` prepended; a bare Petkit word becomes `#Petkit`.
         source_type:
           type: string
           nullable: true
       required:
         - pet_id
         - weight_kg
+
+    UpdateWeightRecord:
+      type: object
+      properties:
+        note:
+          type: string
+          nullable: true
+          description: Set the note (normalized for tags). JSON null resets the note to `#manual`.
 
     HealthStateLevel:
       type: string
@@ -4835,6 +4887,10 @@ components:
         bucket:
           type: string
           description: Bucket identifier — ISO datetime for raw, YYYY-MM-DD for daily/weekly
+        tag:
+          type: string
+          nullable: true
+          description: First hashtag in the note when `group_by=tag`; otherwise null
         avg_kg:
           type: number
           format: double

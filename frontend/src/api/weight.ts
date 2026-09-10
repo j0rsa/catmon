@@ -50,17 +50,25 @@ export type WeightGranularity = 'raw' | 'daily' | 'weekly';
 
 export interface WeightSummaryBucket {
   bucket: string;
+  tag?: string | null;
   avg_kg: number;
   min_kg: number;
   max_kg: number;
   count: number;
 }
 
+export type WeightGroupBy = 'none' | 'tag';
+
 export interface WeightSummaryFilters {
   pet_id: string;
   date_from?: string;
   date_to: string;
   granularity?: WeightGranularity;
+  group_by?: WeightGroupBy;
+}
+
+export interface UpdateWeightRecord {
+  note?: string | null;
 }
 
 export const weightApi = {
@@ -75,5 +83,7 @@ export const weightApi = {
       `/health/weight/summary${toQueryString(filters as unknown as Record<string, string | undefined>)}`,
     ),
   create: (data: CreateWeightRecord) => api.post<WeightRecord>('/health/weight', data),
+  update: (id: string, data: UpdateWeightRecord) =>
+    api.patch<WeightRecord>(`/health/weight/${id}`, data),
   delete: (id: string) => api.delete(`/health/weight/${id}`),
 };

@@ -144,13 +144,13 @@ export const mockNutritionSchedules: NutritionSchedule[] = [
     rules_json: JSON.stringify({
       type: 'liquid',
       windows: [
-        { from: '06:00', to: '07:00', min: 12, max: 15, note: 'First morning liquid, gentle start' },
-        { from: '08:30', to: '09:30', min: 12, max: 15, note: 'Good second portion' },
-        { from: '11:00', to: '12:00', min: 10, max: 13, note: 'Midday support' },
-        { from: '13:30', to: '14:30', min: 10, max: 13, note: 'Keep it steady' },
-        { from: '15:30', to: '16:30', min: 12, max: 15, note: 'Important afternoon portion' },
-        { from: '17:30', to: '18:30', min: 10, max: 13, note: 'Before the fasting window' },
-        { from: '22:00', to: '23:00', min: 8, max: 15, note: 'With prednisolone, if she accepts' },
+        { from: '06:00', min: 12, max: 15, note: 'First morning liquid, gentle start' },
+        { from: '08:30', min: 12, max: 15, note: 'Good second portion' },
+        { from: '11:00', min: 10, max: 13, note: 'Midday support' },
+        { from: '13:30', min: 10, max: 13, note: 'Keep it steady' },
+        { from: '15:30', min: 12, max: 15, note: 'Important afternoon portion' },
+        { from: '17:30', min: 10, max: 13, note: 'Before the fasting window' },
+        { from: '22:00', min: 8, max: 15, note: 'With prednisolone, if she accepts' },
       ],
     }),
     created_at: '2024-01-01T00:00:00Z',
@@ -165,8 +165,8 @@ export const mockNutritionSchedules: NutritionSchedule[] = [
     rules_json: JSON.stringify({
       type: 'food',
       windows: [
-        { from: '07:30', to: '08:00', min: 40, max: 50, note: 'Breakfast' },
-        { from: '18:00', to: '18:30', min: 40, max: 50, note: 'Dinner' },
+        { from: '07:30', min: 40, max: 50, note: 'Breakfast' },
+        { from: '18:00', min: 40, max: 50, note: 'Dinner' },
       ],
     }),
     created_at: '2024-01-01T00:00:00Z',

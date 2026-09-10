@@ -12,7 +12,6 @@ type ScheduleType = 'liquid' | 'food';
 
 interface TimeWindow {
   from: string;
-  to: string;
   min: number;
   max: number;
   note: string;
@@ -35,20 +34,35 @@ function formatWindowTargetRange(windows: TimeWindow[], unit: string): string | 
   return `${min}–${max} ${unit} / day`;
 }
 
+function sortWindows(windows: TimeWindow[]): TimeWindow[] {
+  return [...windows].sort((left, right) => left.from.localeCompare(right.from));
+}
+
+function normalizeWindow(window: Partial<TimeWindow>): TimeWindow {
+  return {
+    from: floorHhmmToStep(window.from ?? '08:00'),
+    min: Number(window.min ?? 0),
+    max: Number(window.max ?? 0),
+    note: window.note ?? '',
+  };
+}
+
 function parseRules(schedule: NutritionSchedule): ScheduleRules {
   try {
     const parsed = JSON.parse(schedule.rules_json);
+    const windows = Array.isArray(parsed.windows)
+      ? parsed.windows.map((w: Record<string, unknown>) =>
+          normalizeWindow({
+            from: typeof w.from === 'string' ? w.from : '',
+            min: typeof w.min === 'number' ? w.min : 0,
+            max: typeof w.max === 'number' ? w.max : 0,
+            note: typeof w.note === 'string' ? w.note : '',
+          }),
+        )
+      : [];
     return {
       type: parsed.type === 'food' ? 'food' : 'liquid',
-      windows: Array.isArray(parsed.windows)
-        ? parsed.windows.map((w: Record<string, unknown>) => ({
-            from: w.from ?? '',
-            to: w.to ?? '',
-            min: w.min ?? 0,
-            max: w.max ?? 0,
-            note: w.note ?? '',
-          }))
-        : [],
+      windows: sortWindows(windows),
     };
   } catch {
     return { type: 'liquid', windows: [] };
@@ -179,7 +193,7 @@ export default function SchedulesPage() {
 function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; canWrite: boolean }) {
   const queryClient = useQueryClient();
   const [rules, setRules] = useState<ScheduleRules>(() => parseRules(schedule));
-  const [addRow, setAddRow] = useState<Partial<TimeWindow>>({ from: '08:00', to: '09:00', note: '' });
+  const [addRow, setAddRow] = useState<Partial<TimeWindow>>({ from: '08:00', note: '' });
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editRow, setEditRow] = useState<TimeWindow | null>(null);
 
@@ -209,20 +223,17 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
   });
 
   function saveRules(updated: ScheduleRules) {
-    saveMutation.mutate(updated);
+    saveMutation.mutate({
+      ...updated,
+      windows: sortWindows(updated.windows.map((window) => normalizeWindow(window))),
+    });
   }
 
   function addWindow() {
-    if (!addRow.from || !addRow.to) return;
-    const win: TimeWindow = {
-      from: floorHhmmToStep(addRow.from),
-      to: floorHhmmToStep(addRow.to),
-      min: Number(addRow.min ?? 0),
-      max: Number(addRow.max ?? 0),
-      note: addRow.note ?? '',
-    };
+    if (!addRow.from) return;
+    const win = normalizeWindow(addRow);
     saveRules({ ...rules, windows: [...rules.windows, win] });
-    setAddRow({ from: '08:00', to: '09:00', note: '' });
+    setAddRow({ from: '08:00', note: '' });
   }
 
   function deleteWindow(index: number) {
@@ -238,11 +249,7 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
     if (editingIndex === null || !editRow) return;
     saveRules({
       ...rules,
-      windows: rules.windows.map((w, i) =>
-        i === editingIndex
-          ? { ...editRow, from: floorHhmmToStep(editRow.from), to: floorHhmmToStep(editRow.to) }
-          : w,
-      ),
+      windows: rules.windows.map((w, i) => (i === editingIndex ? normalizeWindow(editRow) : w)),
     });
     setEditingIndex(null);
     setEditRow(null);
@@ -302,21 +309,21 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
         <span className="schedule-notify-copy">
           <strong>Feeding reminder</strong>
           <span className="muted-text">
-            Notify everyone when intake falls behind the cumulative schedule (same curve as the fluid chart).
-            The server checks every 10 minutes; one reminder per window per day.
+            Notify everyone when a scheduled feeding time arrives and intake is still below the cumulative schedule (same curve as the fluid chart).
+            One reminder per feeding time per day.
           </span>
         </span>
       </label>
 
-      {/* Windows table */}
+      {/* Feeding times table */}
       <div style={{ background: 'var(--surface-inset)', borderRadius: 16, border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
         <div style={{ padding: '0.75rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-subtle)' }}>
-          time windows
+          feeding times
         </div>
 
         {rules.windows.length === 0 && (
           <div style={{ padding: '1rem', color: 'var(--text-subtle)', fontSize: '0.88rem' }}>
-            No time windows defined.
+            No feeding times defined.
           </div>
         )}
 
@@ -324,15 +331,9 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
           editingIndex === index && editRow ? (
             <div key={index} style={{ display: 'flex', gap: '0.5rem', padding: '0.6rem 1rem', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
               <ScheduleTimeInput
-                aria-label="From"
+                aria-label="Time"
                 value={editRow.from}
                 onChange={(from) => setEditRow({ ...editRow, from })}
-              />
-              <span style={{ color: 'var(--text-subtle)' }}>–</span>
-              <ScheduleTimeInput
-                aria-label="To"
-                value={editRow.to}
-                onChange={(to) => setEditRow({ ...editRow, to })}
               />
               <input type="text" inputMode="decimal" aria-label={`Minimum ${unit}`} placeholder={`min ${unit}`} value={editRow.min || ''} onChange={(e) => setEditRow({ ...editRow, min: parseDecimal(e.target.value) })} style={{ width: 90 }} />
               <input type="text" inputMode="decimal" aria-label={`Maximum ${unit}`} placeholder={`max ${unit}`} value={editRow.max || ''} onChange={(e) => setEditRow({ ...editRow, max: parseDecimal(e.target.value) })} style={{ width: 90 }} />
@@ -349,15 +350,9 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
         {canWrite && <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1rem', alignItems: 'center', borderTop: rules.windows.length > 0 ? '1px solid var(--border-subtle)' : undefined, flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginRight: '0.25rem' }}>add:</span>
           <ScheduleTimeInput
-            aria-label="From"
+            aria-label="Time"
             value={addRow.from ?? '08:00'}
             onChange={(from) => setAddRow({ ...addRow, from })}
-          />
-          <span style={{ color: 'var(--text-subtle)' }}>–</span>
-          <ScheduleTimeInput
-            aria-label="To"
-            value={addRow.to ?? '09:00'}
-            onChange={(to) => setAddRow({ ...addRow, to })}
           />
           <input type="text" inputMode="decimal" aria-label={`Minimum ${unit}`} placeholder={`min ${unit}`} value={addRow.min ?? ''} onChange={(e) => setAddRow({ ...addRow, min: parseDecimal(e.target.value) })} style={{ width: 90 }} />
           <input type="text" inputMode="decimal" aria-label={`Maximum ${unit}`} placeholder={`max ${unit}`} value={addRow.max ?? ''} onChange={(e) => setAddRow({ ...addRow, max: parseDecimal(e.target.value) })} style={{ width: 90 }} />
@@ -383,7 +378,7 @@ function ScheduleTimeInput({
   return (
     <input
       type="time"
-      step={60}
+      step={600}
       aria-label={ariaLabel}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -397,8 +392,8 @@ function WindowRow({ window: win, unit, onEdit, onDelete, canWrite }: { window: 
   const amount = win.min === win.max ? `${win.min} ${unit}` : `${win.min}–${win.max} ${unit}`;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderBottom: '1px solid var(--border-subtle)' }}>
-      <span style={{ fontFamily: 'monospace', fontSize: '0.88rem', color: 'var(--text-muted)', minWidth: 110 }}>
-        {win.from}–{win.to}
+      <span style={{ fontFamily: 'monospace', fontSize: '0.88rem', color: 'var(--text-muted)', minWidth: 60 }}>
+        {win.from}
       </span>
       <span style={{ fontWeight: 700, minWidth: 90, fontSize: '0.95rem' }}>{amount}</span>
       <span style={{ flex: 1, color: 'var(--text-muted)', fontSize: '0.88rem' }}>{win.note}</span>

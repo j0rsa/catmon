@@ -2420,7 +2420,7 @@ paths:
         Returns cumulative nutrition intake and liquid schedule expectations for a pet as of a point in time.
         When `ts` is omitted, the server uses the current time in the configured timezone.
         Cumulative intake includes only records on the local date of `ts` whose `occurred_at` is at or before `ts`.
-        Schedule expectations use the active liquid schedule and step up at each window midpoint, matching the cumulative fluid chart.
+        Schedule expectations use the active liquid schedule and step up at each scheduled feeding time, matching the cumulative fluid chart.
       parameters:
         - name: pet_id
           in: query
@@ -3172,31 +3172,27 @@ components:
       properties:
         from:
           type: string
-          description: Window start time (HH:MM). Floored to a 10-minute step on save.
-        to:
-          type: string
-          description: Window end time (HH:MM). Floored to a 10-minute step on save.
+          description: Scheduled feeding time (HH:MM). Floored to a 10-minute step on save; windows are stored sorted by time.
         min:
           type: number
           format: double
-          description: Minimum amount for this window
+          description: Minimum amount for this feeding time
         max:
           type: number
           format: double
-          description: Maximum amount for this window
+          description: Maximum amount for this feeding time
         note:
           type: string
           nullable: true
-          description: Optional note for this window
+          description: Optional note for this feeding time
       required:
         - from
-        - to
         - min
         - max
 
     NutritionScheduleRules:
       type: object
-      description: Window-based feeding schedule. Daily targets are derived by summing window min/max values. Time-of-day expectations are available from GET /nutrition/status.
+      description: Feeding schedule with one or more daily feeding times. Daily targets are derived by summing window min/max values. Time-of-day expectations are available from GET /nutrition/status.
       properties:
         type:
           type: string
@@ -3438,7 +3434,7 @@ components:
         expected_ml:
           type: number
           format: double
-          description: Cumulative schedule expectation as of the timestamp (sum of window max values whose midpoint has passed)
+          description: Cumulative schedule expectation as of the timestamp (sum of window max values whose scheduled feeding time has passed)
         daily_min_ml:
           type: number
           format: double

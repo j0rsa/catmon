@@ -22,7 +22,6 @@ export interface CumulativeFluidPoint extends TimePoint {
 
 interface ScheduleWindow {
   from: string;
-  to: string;
   min: number;
   max: number;
   note?: string;
@@ -159,9 +158,8 @@ export function buildScheduleCurve(windows: ScheduleWindow[]) {
   points.push({ x: leadIn, total: 0 });
 
   for (const w of active) {
-    const midX = Math.round((timeToRefMs(w.from) + timeToRefMs(w.to)) / 2);
     cumulative += w.max;
-    points.push({ x: midX, total: cumulative });
+    points.push({ x: timeToRefMs(w.from), total: cumulative });
   }
 
   return points;

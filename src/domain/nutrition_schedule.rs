@@ -57,6 +57,7 @@ pub fn normalize_rules_json(rules: Option<serde_json::Value>) -> Result<String, 
     }
     strip_stored_targets(&mut value);
     snap_window_times(&mut value);
+    sort_windows_by_time(&mut value);
     Ok(value.to_string())
 }
 
@@ -72,6 +73,7 @@ pub fn normalize_rules_json_str(rules_json: &str) -> String {
     }
     strip_stored_targets(&mut value);
     snap_window_times(&mut value);
+    sort_windows_by_time(&mut value);
     value.to_string()
 }
 
@@ -92,17 +94,33 @@ fn snap_window_times(value: &mut serde_json::Value) {
         let Some(obj) = window.as_object_mut() else {
             continue;
         };
-        for key in ["from", "to"] {
-            if let Some(raw) = obj.get(key).and_then(|v| v.as_str()) {
-                if let Some(floored) = crate::domain::nutrition_status::floor_hhmm_to_step(
-                    raw,
-                    crate::domain::nutrition_status::FEEDING_TIME_STEP_MINUTES,
-                ) {
-                    obj.insert(key.to_string(), serde_json::Value::String(floored));
-                }
+        obj.remove("to");
+        if let Some(raw) = obj.get("from").and_then(|v| v.as_str()) {
+            if let Some(floored) = crate::domain::nutrition_status::floor_hhmm_to_step(
+                raw,
+                crate::domain::nutrition_status::FEEDING_TIME_STEP_MINUTES,
+            ) {
+                obj.insert("from".to_string(), serde_json::Value::String(floored));
             }
         }
     }
+}
+
+fn sort_windows_by_time(value: &mut serde_json::Value) {
+    let Some(windows) = value.get_mut("windows").and_then(|w| w.as_array_mut()) else {
+        return;
+    };
+    windows.sort_by(|left, right| {
+        let left_from = left
+            .get("from")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        let right_from = right
+            .get("from")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        left_from.cmp(right_from)
+    });
 }
 
 impl NutritionSchedule {
@@ -139,7 +157,7 @@ mod tests {
             "target_max": 109,
             "target_min_ml": 70,
             "target_max_ml": 120,
-            "windows": [{ "from": "08:00", "to": "09:00", "min": 10, "max": 12 }]
+            "windows": [{ "from": "08:00", "min": 10, "max": 12 }]
         });
         let normalized = normalize_rules_json(Some(raw)).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
@@ -150,19 +168,35 @@ mod tests {
         assert!(parsed.get("target_max_ml").is_none());
         assert_eq!(parsed["windows"].as_array().unwrap().len(), 1);
         assert_eq!(parsed["windows"][0]["from"], "08:00");
-        assert_eq!(parsed["windows"][0]["to"], "09:00");
+        assert!(parsed["windows"][0].get("to").is_none());
     }
 
     #[test]
     fn normalize_rules_json_floors_window_times_to_ten_minutes() {
         let raw = json!({
             "type": "liquid",
-            "windows": [{ "from": "08:07", "to": "09:04", "min": 10, "max": 12 }]
+            "windows": [{ "from": "08:07", "min": 10, "max": 12 }]
         });
         let normalized = normalize_rules_json(Some(raw)).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
         assert_eq!(parsed["windows"][0]["from"], "08:00");
-        assert_eq!(parsed["windows"][0]["to"], "09:00");
+        assert!(parsed["windows"][0].get("to").is_none());
+    }
+
+    #[test]
+    fn normalize_rules_json_sorts_windows_by_time() {
+        let raw = json!({
+            "type": "liquid",
+            "windows": [
+                { "from": "22:00", "min": 10, "max": 12 },
+                { "from": "01:00", "min": 8, "max": 10 }
+            ]
+        });
+        let normalized = normalize_rules_json(Some(raw)).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        let windows = parsed["windows"].as_array().unwrap();
+        assert_eq!(windows[0]["from"], "01:00");
+        assert_eq!(windows[1]["from"], "22:00");
     }
 
     #[test]

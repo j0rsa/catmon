@@ -1,7 +1,26 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { expect } from 'storybook/test';
+import type { Decorator, Meta, StoryObj } from '@storybook/react-vite';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
+import { expect, waitFor } from 'storybook/test';
+import { DisplaySettingsProvider } from '../context/DisplaySettingsProvider';
+import { SelectedPetProvider } from '../context/SelectedPetContext';
+import { EliminationLayout } from '../layouts/EliminationLayout';
+import EliminationJournalPage from '../pages/EliminationJournalPage';
 import { withDemoLayoutData, withLayoutData } from '../stories/decorators';
+import {
+  mockAppInfo,
+  mockCumulativeFluidChartSettings,
+  mockDaySummary,
+  mockDeveloperModeSettings,
+  mockDisplaySettings,
+  mockEliminationDaySummary,
+  mockEliminationRecords,
+  mockNotifications,
+  mockNutritionCalendarSettings,
+  mockPetId,
+  mockPets,
+} from '../stories/fixtures';
 import {
   asNarrowStory,
   assertBottomNavPinned,
@@ -10,6 +29,59 @@ import {
   withDeviceInsets,
 } from '../stories/viewport';
 import { Layout } from './Layout';
+
+const eliminationDeepLinkDate = '2024-06-15';
+const eliminationDeepLinkHash = '#record-elim-01';
+
+const withNotificationDeepLinkData: Decorator = (Story) => {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, staleTime: Infinity, refetchOnMount: false, refetchOnWindowFocus: false },
+    },
+  });
+  client.setQueryData(['pets'], mockPets);
+  client.setQueryData(['me'], { subject: 'dev', email: null, name: 'Dev', display_name: 'Dev', kind: 'dev', scopes: [] });
+  client.setQueryData(['app-info'], mockAppInfo);
+  client.setQueryData(['user-settings', 'display'], mockDisplaySettings);
+  client.setQueryData(['user-settings', 'nutrition_calendar'], mockNutritionCalendarSettings);
+  client.setQueryData(['user-settings', 'cumulative_fluid_chart'], mockCumulativeFluidChartSettings);
+  client.setQueryData(['user-settings', 'developer_mode'], mockDeveloperModeSettings);
+  client.setQueryData(['notifications-unread-count'], { count: 1 });
+  client.setQueryData(['notifications'], mockNotifications);
+  client.setQueryData(
+    ['elimination-records-day', eliminationDeepLinkDate, mockPetId],
+    mockEliminationRecords.map((r) => ({ ...r, local_date: eliminationDeepLinkDate })),
+  );
+  client.setQueryData(['elimination-calendar', eliminationDeepLinkDate.slice(0, 7), mockPetId], [mockEliminationDaySummary]);
+  client.setQueryData(['day-summary', eliminationDeepLinkDate, mockPetId], { ...mockDaySummary, local_date: eliminationDeepLinkDate });
+
+  return (
+    <QueryClientProvider client={client}>
+      <DisplaySettingsProvider>
+        <SelectedPetProvider initialPetId={mockPetId}>
+          <Story />
+        </SelectedPetProvider>
+      </DisplaySettingsProvider>
+    </QueryClientProvider>
+  );
+};
+
+function NotificationDeepLinkHarness() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    window.scrollTo(0, 600);
+    navigate(`/elimination/${eliminationDeepLinkDate}${eliminationDeepLinkHash}`);
+  }, [navigate]);
+  return (
+    <div className="page-stack">
+      <section className="panel" style={{ minHeight: '120vh' }}>
+        <p className="eyebrow">Home</p>
+        <h2>Tall home page</h2>
+        <p className="muted-text">Simulates scroll position before opening a notification link.</p>
+      </section>
+    </div>
+  );
+}
 
 const meta = {
   title: 'Layouts/Layout',
@@ -152,3 +224,44 @@ export const NotchedPhoneWithoutBanner: Story = {
 };
 
 export const NotchedPhoneWithoutBannerNarrow = asNarrowStory(NotchedPhoneWithoutBanner);
+
+export const NotificationDeepLinkMobile: Story = {
+  name: 'Notification deep link keeps bottom nav pinned',
+  decorators: [withNotificationDeepLinkData],
+  parameters: {
+    viewport: { defaultViewport: 'pwaMobile' },
+    docs: {
+      description: {
+        story:
+          'Opening a notification deep link from a scrolled page must reset scroll on pathname change '
+          + 'and keep the bottom nav fixed to the viewport edge.',
+      },
+    },
+  },
+  render: () => (
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<NotificationDeepLinkHarness />} />
+          <Route path="/elimination" element={<EliminationLayout />}>
+            <Route index element={<EliminationJournalPage />} />
+            <Route path=":date" element={<EliminationJournalPage />} />
+          </Route>
+        </Route>
+      </Routes>
+    </MemoryRouter>
+  ),
+  play: async ({ canvasElement }) => {
+    await waitFor(
+      () => {
+        expect(canvasElement.querySelector('#record-elim-01')).toBeTruthy();
+      },
+      { timeout: 5000 },
+    );
+    assertBottomNavPinned(canvasElement, 0);
+    window.scrollTo(0, 300);
+    assertBottomNavPinned(canvasElement, 0);
+  },
+};
+
+export const NotificationDeepLinkMobileNarrow = asNarrowStory(NotificationDeepLinkMobile);

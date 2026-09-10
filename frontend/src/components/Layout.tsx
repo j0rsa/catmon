@@ -29,8 +29,10 @@ export function Layout() {
         <main className="content">
           <Outlet />
         </main>
-        <BottomNav />
       </div>
+      {/* Outside .app-shell so iOS PWA fixed positioning is not tied to the grid
+          scroll container (notification deep-links scroll the page heavily). */}
+      <BottomNav />
     </SelectedPetProvider>
   );
 }

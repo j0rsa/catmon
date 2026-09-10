@@ -1279,13 +1279,14 @@ paths:
           required: false
           description: Max records to return. Defaults to 10 when no date_from/date_to filter is set.
           schema: { type: integer, format: int64, minimum: 1, default: 10 }
-        - name: exclude_tags
+        - name: tags
           in: query
           required: false
           description: |
-            Comma-separated hashtags to hide (without `#`). Records that carry
-            any of these tags are omitted; the default last-10 / date-range
-            paging applies to what remains.
+            Comma-separated hashtags to keep (without `#`). When omitted, every
+            record is returned. When set, only records that carry any of these
+            tags are returned; the default last-10 / date-range paging applies
+            to what remains.
           schema: { type: string, example: 'Petkit,manual' }
       responses:
         '200':

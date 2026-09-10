@@ -494,16 +494,16 @@ fn tool_list() -> Value {
             // ── Weight records ───────────────────────────────────────────────
             {
                 "name": "weight.records.list",
-                "description": "List weight records for a pet. Without date_from/date_to returns the last 10 records (newest first). With a date range returns all matches (oldest first) for charting. Pass exclude_tags as a comma-separated list (e.g. Petkit,manual) to hide records that carry those hashtags.",
+                "description": "List weight records for a pet. Without date_from/date_to returns the last 10 records (newest first). With a date range returns all matches (oldest first) for charting. Pass tags as a comma-separated list (e.g. Petkit,manual) to keep only records that carry those hashtags; omit it to return every record.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "pet_id":       { "type": "string", "format": "uuid" },
-                        "date_from":    { "type": "string", "format": "date" },
-                        "date_to":      { "type": "string", "format": "date" },
-                        "limit":        { "type": "integer" },
-                        "offset":       { "type": "integer" },
-                        "exclude_tags": { "type": "string", "description": "Comma-separated hashtags to hide, without the # prefix." }
+                        "pet_id":    { "type": "string", "format": "uuid" },
+                        "date_from": { "type": "string", "format": "date" },
+                        "date_to":   { "type": "string", "format": "date" },
+                        "limit":     { "type": "integer" },
+                        "offset":    { "type": "integer" },
+                        "tags":      { "type": "string", "description": "Comma-separated hashtags to keep, without the # prefix. Empty means all records." }
                     }
                 }
             },
@@ -1555,7 +1555,7 @@ pub async fn dispatch(
                         date_to: None,
                         limit: Some(10),
                         offset: None,
-                        exclude_tags: None,
+                        tags: None,
                     }
                 ),
                 weight_service::stats(pool, &pet_id_str, &thirty_days_ago, &today),

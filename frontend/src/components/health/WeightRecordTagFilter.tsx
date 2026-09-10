@@ -4,19 +4,19 @@ import type { WeightTagCount } from '../../api/weight';
 
 interface WeightRecordTagFilterProps {
   tags: WeightTagCount[];
-  excluded: string[];
-  onChange: (excluded: string[]) => void;
+  selected: string[];
+  onChange: (selected: string[]) => void;
 }
 
-function isExcluded(tag: string, excluded: string[]): boolean {
+function isSelected(tag: string, selected: string[]): boolean {
   const needle = tag.toLowerCase();
-  return excluded.some((item) => item.toLowerCase() === needle);
+  return selected.some((item) => item.toLowerCase() === needle);
 }
 
-export function WeightRecordTagFilter({ tags, excluded, onChange }: WeightRecordTagFilterProps) {
+export function WeightRecordTagFilter({ tags, selected, onChange }: WeightRecordTagFilterProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const active = excluded.length > 0;
+  const active = selected.length > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -41,13 +41,13 @@ export function WeightRecordTagFilter({ tags, excluded, onChange }: WeightRecord
     };
   }, [open]);
 
-  function toggle(tag: string, hide: boolean) {
-    if (hide) {
-      if (isExcluded(tag, excluded)) return;
-      onChange([...excluded, tag]);
+  function toggle(tag: string, keep: boolean) {
+    if (keep) {
+      if (isSelected(tag, selected)) return;
+      onChange([...selected, tag]);
       return;
     }
-    onChange(excluded.filter((item) => item.toLowerCase() !== tag.toLowerCase()));
+    onChange(selected.filter((item) => item.toLowerCase() !== tag.toLowerCase()));
   }
 
   if (tags.length === 0) return null;
@@ -64,19 +64,19 @@ export function WeightRecordTagFilter({ tags, excluded, onChange }: WeightRecord
       >
         <ListFilter size={16} aria-hidden="true" />
         Filter
-        {active ? <span className="weight-record-filter-count">{excluded.length}</span> : null}
+        {active ? <span className="weight-record-filter-count">{selected.length}</span> : null}
       </button>
       {open && (
         <div className="widget-settings-popover weight-record-filter-popover" role="dialog" aria-label="Filter weight records">
-          <p className="widget-settings-title">Hide tags</p>
-          <p className="widget-settings-hint">Checked tags are removed from this list.</p>
+          <p className="widget-settings-title">Show tags</p>
+          <p className="widget-settings-hint">Nothing checked shows every record. Check a tag to keep only those weigh-ins.</p>
           <div className="widget-settings-checkbox-list">
             {tags.map((item) => (
               <label key={item.tag} className="checkbox-row widget-settings-checkbox">
                 <input
                   type="checkbox"
-                  aria-label={`Hide #${item.tag}`}
-                  checked={isExcluded(item.tag, excluded)}
+                  aria-label={`Show #${item.tag}`}
+                  checked={isSelected(item.tag, selected)}
                   onChange={(event) => toggle(item.tag, event.target.checked)}
                 />
                 <span>#{item.tag}</span>

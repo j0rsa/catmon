@@ -645,49 +645,116 @@ fn elim_event(
     }
 }
 
+fn weekly_weight(base: f64, variation: f64, week: i64) -> f64 {
+    let trend = (week as f64) * variation * 0.15;
+    let weight =
+        (base - trend + (week % 3) as f64 * variation * 0.1 - variation * 0.05).max(base * 0.9);
+    (weight * 1000.0).round() / 1000.0
+}
+
+async fn insert_weight(
+    pool: &SqlitePool,
+    pet_id: Uuid,
+    local_date: &str,
+    time: &str,
+    weight_kg: f64,
+    note: Option<&str>,
+) -> AppResult<()> {
+    weight_records::create(
+        pool,
+        CreateWeightRecord {
+            pet_id: pet_id.to_string(),
+            measured_at: Some(format!("{local_date}T{time}")),
+            local_date: Some(local_date.to_string()),
+            weight_kg,
+            note: note.map(str::to_string),
+            source_type: Some("manual".to_string()),
+        },
+        chrono_tz::UTC,
+    )
+    .await?;
+    Ok(())
+}
+
 async fn seed_weight_records(pool: &SqlitePool, _demo_pets: &[Pet]) -> AppResult<usize> {
     let today = Utc::now().date_naive();
     let mut count = 0usize;
 
-    // Base weights and typical variation per species
-    let baselines: &[(Uuid, f64, f64)] = &[
-        (Uuid::parse_str(MITTENS_ID).unwrap(), 4.20, 0.08),
-        (Uuid::parse_str(REX_ID).unwrap(), 32.50, 0.30),
-        (Uuid::parse_str(PEPPER_ID).unwrap(), 0.065, 0.003),
-        (Uuid::parse_str(CLOVER_ID).unwrap(), 1.80, 0.05),
+    let mittens = Uuid::parse_str(MITTENS_ID).unwrap();
+    let rex = Uuid::parse_str(REX_ID).unwrap();
+    let pepper = Uuid::parse_str(PEPPER_ID).unwrap();
+    let clover = Uuid::parse_str(CLOVER_ID).unwrap();
+
+    // Weekly home / clinic weigh-ins over the last 90 days. Notes mix tags so
+    // the Health filter and chart have more than a single #manual series.
+    let weekly: &[(Uuid, f64, f64)] = &[
+        (mittens, 4.20, 0.08),
+        (rex, 32.50, 0.30),
+        (pepper, 0.065, 0.003),
+        (clover, 1.80, 0.05),
     ];
 
-    for (pet_id, base, variation) in baselines {
-        // One measurement every ~7 days over the last 90 days
+    for (pet_id, base, variation) in weekly {
         for week in 0..13i64 {
             let days_ago = week * 7;
             let date = today - Duration::days(days_ago);
             let local_date = date.format("%Y-%m-%d").to_string();
-            // Gentle trend: slight increase over time (reversed since we go back in time)
-            let trend = (week as f64) * variation * 0.15;
-            let weight = (base - trend + (week % 3) as f64 * variation * 0.1 - variation * 0.05)
-                .max(base * 0.9);
-            let weight = (weight * 100.0).round() / 100.0;
+            let kg = weekly_weight(*base, *variation, week);
+            let note = match (*pet_id, week) {
+                (_, 0) => Some("Regular weigh-in"),
+                (id, 4 | 8) if id == mittens || id == rex => Some("#vet clinic"),
+                (id, w) if id == clover && w % 2 == 1 => Some("#home hay-room scale"),
+                (id, 6) if id == pepper => Some("#vet checkup"),
+                _ => None,
+            };
+            insert_weight(pool, *pet_id, &local_date, "09:00:00", kg, note).await?;
+            count += 1;
+        }
+    }
 
-            weight_records::create(
+    // Mittens: dense Petkit litter-scale readings (~5/day for the last 18 days).
+    const PETKIT_SLOTS: &[(&str, f64)] = &[
+        ("05:26:00", -0.04),
+        ("09:51:00", 0.00),
+        ("13:17:00", 0.03),
+        ("17:49:00", 0.01),
+        ("23:04:00", -0.02),
+    ];
+    for days_ago in 0..18i64 {
+        let date = today - Duration::days(days_ago);
+        let local_date = date.format("%Y-%m-%d").to_string();
+        let week = days_ago / 7;
+        let day_kg = weekly_weight(4.20, 0.08, week);
+        for (time, jitter) in PETKIT_SLOTS {
+            let kg = ((day_kg + jitter + (days_ago % 3) as f64 * 0.01) * 100.0).round() / 100.0;
+            insert_weight(
                 pool,
-                CreateWeightRecord {
-                    pet_id: pet_id.to_string(),
-                    measured_at: Some(format!("{local_date}T09:00:00")),
-                    local_date: Some(local_date.clone()),
-                    weight_kg: weight,
-                    note: if days_ago == 0 {
-                        Some("Regular weigh-in".to_string())
-                    } else {
-                        None
-                    },
-                    source_type: Some("manual".to_string()),
-                },
-                chrono_tz::UTC,
+                mittens,
+                &local_date,
+                time,
+                kg,
+                Some("Petkit toileting"),
             )
             .await?;
             count += 1;
         }
+    }
+
+    // Rex: a few extra evening #home readings so the dog isn't only weekly + vet.
+    for days_ago in [2i64, 9, 16, 30] {
+        let date = today - Duration::days(days_ago);
+        let local_date = date.format("%Y-%m-%d").to_string();
+        let kg = weekly_weight(32.50, 0.30, days_ago / 7) - 0.12;
+        insert_weight(
+            pool,
+            rex,
+            &local_date,
+            "18:30:00",
+            (kg * 100.0).round() / 100.0,
+            Some("#home after walk"),
+        )
+        .await?;
+        count += 1;
     }
 
     Ok(count)
@@ -1094,7 +1161,27 @@ mod tests {
         assert_eq!(summary.pets, 4);
         assert!(summary.nutrition_records > 100);
         assert!(summary.elimination_records > 50);
-        assert!(summary.weight_records > 0);
+        assert!(summary.weight_records > 50);
+        let mittens_weights = weight_records::list(
+            &pool,
+            &crate::domain::weight::WeightRecordFilters {
+                pet_id: Some(MITTENS_ID.to_string()),
+                date_from: None,
+                date_to: None,
+                limit: Some(200),
+                offset: None,
+                tags: None,
+            },
+        )
+        .await
+        .expect("mittens weights");
+        let notes: Vec<&str> = mittens_weights
+            .iter()
+            .filter_map(|r| r.note.as_deref())
+            .collect();
+        assert!(notes.iter().any(|n| n.contains("#Petkit")));
+        assert!(notes.iter().any(|n| n.contains("#manual")));
+        assert!(notes.iter().any(|n| n.contains("#vet")));
         assert_eq!(summary.day_notes, 4);
         assert_eq!(summary.schedules, 3);
         assert_eq!(summary.medications, 6);

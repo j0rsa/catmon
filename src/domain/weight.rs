@@ -51,10 +51,11 @@ pub struct WeightRecordFilters {
     pub date_to: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
-    /// Comma-separated hashtags to hide (`Petkit,manual`). Matching is
-    /// case-insensitive and looks at every tag in the note.
+    /// Comma-separated hashtags to keep (`Petkit,manual`). When empty, all
+    /// records are returned. Matching is case-insensitive and looks at every
+    /// tag in the note.
     #[serde(default)]
-    pub exclude_tags: Option<String>,
+    pub tags: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -130,8 +131,8 @@ pub fn tags_for_note(note: Option<&str>) -> Vec<String> {
     }
 }
 
-/// Parse a comma-separated exclude list, dropping empty fragments.
-pub fn parse_exclude_tags(raw: Option<&str>) -> Vec<String> {
+/// Parse a comma-separated tag filter, dropping empty fragments.
+pub fn parse_tag_filter(raw: Option<&str>) -> Vec<String> {
     raw.unwrap_or("")
         .split(',')
         .map(str::trim)
@@ -408,7 +409,7 @@ mod tests {
         ));
         assert!(note_has_any_tag(None, &["manual".into()]));
         assert_eq!(
-            parse_exclude_tags(Some(" Petkit, manual ,")),
+            parse_tag_filter(Some(" Petkit, manual ,")),
             vec!["Petkit".to_string(), "manual".to_string()]
         );
     }

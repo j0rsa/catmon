@@ -41,15 +41,15 @@ export default function HealthPage() {
   const formatTime = useFormatTime();
 
   const [period, setPeriod] = useState<PeriodLabel>('30d');
-  const [tagFilter, setTagFilter] = useState<{ petId: string | null; excluded: string[] }>({
+  const [tagFilter, setTagFilter] = useState<{ petId: string | null; selected: string[] }>({
     petId: null,
-    excluded: [],
+    selected: [],
   });
-  const excludedTags = tagFilter.petId === selectedPetId ? tagFilter.excluded : [];
+  const selectedTags = tagFilter.petId === selectedPetId ? tagFilter.selected : [];
   const today = localToday();
   const { days: periodDays, granularity } = WEIGHT_PERIODS.find((p) => p.label === period)!;
   const dateFrom = periodDays != null ? shiftDate(today, -(periodDays - 1)) : undefined;
-  const excludeKey = [...excludedTags].sort((a, b) => a.localeCompare(b)).join(',');
+  const filterKey = [...selectedTags].sort((a, b) => a.localeCompare(b)).join(',');
 
   const summaryQuery = useQuery({
     queryKey: ['weight-summary', dateFrom ?? 'all', today, granularity, 'tag', selectedPetId],
@@ -71,11 +71,11 @@ export default function HealthPage() {
   });
 
   const weightsQuery = useQuery({
-    queryKey: ['weight-records', selectedPetId, excludeKey],
+    queryKey: ['weight-records', selectedPetId, filterKey],
     queryFn: () => weightApi.list({
       pet_id: selectedPetId!,
       limit: 10,
-      exclude_tags: excludedTags.length > 0 ? excludedTags : undefined,
+      tags: selectedTags.length > 0 ? selectedTags : undefined,
     }),
     enabled: Boolean(selectedPetId),
   });
@@ -132,10 +132,10 @@ export default function HealthPage() {
   const fetched = Array.isArray(weightsQuery.data) ? weightsQuery.data : (latestQuery.data ?? []);
   const records = fetched
     .filter((r) => r.local_date && r.weight_kg != null)
-    .filter((r) => excludedTags.length === 0 || !weightNoteHasAnyTag(r.note, excludedTags));
+    .filter((r) => selectedTags.length === 0 || weightNoteHasAnyTag(r.note, selectedTags));
   const latest = (latestQuery.data ?? []).find((r) => r.local_date && r.weight_kg != null);
   const tagOptions = tagsQuery.data ?? [];
-  const showRecentRecords = (latestQuery.data ?? []).length > 0 || excludedTags.length > 0;
+  const showRecentRecords = (latestQuery.data ?? []).length > 0 || selectedTags.length > 0;
   const hasActiveTreatmentPlan = hasActiveAssignmentOn(assignmentsQuery.data ?? [], today);
 
   function formatRecordWhen(measuredAt: string, localDate: string): string {
@@ -260,8 +260,8 @@ export default function HealthPage() {
               </span>
               <WeightRecordTagFilter
                 tags={tagOptions}
-                excluded={excludedTags}
-                onChange={(excluded) => setTagFilter({ petId: selectedPetId, excluded })}
+                selected={selectedTags}
+                onChange={(selected) => setTagFilter({ petId: selectedPetId, selected })}
               />
             </div>
           </div>

@@ -40,7 +40,7 @@ Adding a new pet-setting key: add the constant + types to `src/domain/pet_settin
 
 Push subscriptions remain per browser endpoint; notification read state and push ownership follow `reader_key`.
 
-**Weight notes** store hashtags in the `note` text (`#Petkit`, `#manual`, …). Create/update always normalize: a bare `Petkit` word becomes `#Petkit`; a note with no `#tag` gets `#manual` prepended (empty notes become `#manual`). The Health chart splits series by the first tag; click a legend to isolate it. Recent records are a wrapping card list (not a table) so Edit/Delete stay on-screen at 360px. Read mode shows tags as badges; edit mode shows the stored text.
+**Weight notes** store hashtags in the `note` text (`#Petkit`, `#manual`, …). Create/update always normalize: a bare `Petkit` word becomes `#Petkit`; a note with no `#tag` gets `#manual` prepended (empty notes become `#manual`). The Health chart splits series by the first tag; click a legend to isolate it. Recent records are a wrapping card list (not a table) so Edit/Delete stay on-screen at 360px. Read mode shows tags as badges; edit mode shows the stored text. A Filter control lists distinct tags for the pet; checked tags are hidden from the list (empty selection shows all).
 
 **Selected pet** is browser-local (`localStorage` key `petmon-selected-pet-id`), not a user setting. Restore it after refresh. While the pets query is pending, `data` is `undefined` — do not treat the `data ?? []` empty array as “no pets”, or the stored id is wiped and the UI falls back to the first pet.
 

@@ -41,6 +41,7 @@ import {
   mockMedAssignments,
   mockMedBundles,
 } from './fixtures';
+import { tagsForWeightNote } from '../lib/weightNote';
 
 /** Single router wrapper — use `parameters.route` per story to set the active path. */
 export const withMemoryRouter: Decorator = (Story, { parameters }) => (
@@ -458,6 +459,7 @@ export function withHealthPage({ petId = mockPetId, loading = false, empty = fal
     if (loading) {
       const pending = () => new Promise(() => {});
       client.setQueryDefaults(['weight-records', petId], { queryFn: pending });
+      client.setQueryDefaults(['weight-tags', petId], { queryFn: pending });
       client.setQueryDefaults(['weight-summary'], { queryFn: pending });
       client.setQueryDefaults(['health-state-records', petId], { queryFn: pending });
       client.setQueryDefaults(['health-state-chart', petId], { queryFn: pending });
@@ -465,10 +467,25 @@ export function withHealthPage({ petId = mockPetId, loading = false, empty = fal
       client.setQueryDefaults(['med-assignments', petId], { queryFn: pending });
       client.setQueryDefaults(['med-bundles', petId], { queryFn: pending });
     } else {
-      client.setQueryData(
-        ['weight-records', petId],
-        empty ? [] : mockWeightRecords.map((r) => ({ ...r, pet_id: petId })),
-      );
+      const petRecords = empty ? [] : mockWeightRecords.map((r) => ({ ...r, pet_id: petId }));
+      const tagCounts = (() => {
+        const counts = new Map<string, { tag: string; count: number }>();
+        for (const record of petRecords) {
+          const seen = new Set<string>();
+          for (const tag of tagsForWeightNote(record.note)) {
+            const key = tag.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const existing = counts.get(key);
+            if (existing) existing.count += 1;
+            else counts.set(key, { tag, count: 1 });
+          }
+        }
+        return [...counts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+      })();
+
+      client.setQueryData(['weight-records', petId, ''], petRecords);
+      client.setQueryData(['weight-tags', petId], tagCounts);
 
       const todayStr = localToday();
       const thirtyFrom = shiftDate(todayStr, -29);

@@ -9,12 +9,14 @@ import { HealthStatePanel } from '../components/health/HealthStatePanel';
 import { MedIntakePanel } from '../components/health/MedIntakePanel';
 import { WeightHistoryChart } from '../components/health/WeightHistoryChart';
 import { WeightRecordList } from '../components/health/WeightRecordList';
+import { WeightRecordTagFilter } from '../components/health/WeightRecordTagFilter';
 import { useSelectedPet } from '../context/SelectedPetContext';
 import { localToday, shiftDate } from '../lib/dates';
 import { usePermissions } from '../context/usePermissions';
 import { useFormatDate, useFormatTime } from '../context/useDisplaySettings';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { hasActiveAssignmentOn } from '../lib/medications';
+import { weightNoteHasAnyTag } from '../lib/weightNote';
 
 type PeriodLabel = '30d' | '90d' | '1y' | 'all';
 
@@ -39,9 +41,15 @@ export default function HealthPage() {
   const formatTime = useFormatTime();
 
   const [period, setPeriod] = useState<PeriodLabel>('30d');
+  const [tagFilter, setTagFilter] = useState<{ petId: string | null; excluded: string[] }>({
+    petId: null,
+    excluded: [],
+  });
+  const excludedTags = tagFilter.petId === selectedPetId ? tagFilter.excluded : [];
   const today = localToday();
   const { days: periodDays, granularity } = WEIGHT_PERIODS.find((p) => p.label === period)!;
   const dateFrom = periodDays != null ? shiftDate(today, -(periodDays - 1)) : undefined;
+  const excludeKey = [...excludedTags].sort((a, b) => a.localeCompare(b)).join(',');
 
   const summaryQuery = useQuery({
     queryKey: ['weight-summary', dateFrom ?? 'all', today, granularity, 'tag', selectedPetId],
@@ -56,9 +64,25 @@ export default function HealthPage() {
     placeholderData: keepPreviousData,
   });
 
-  const weightsQuery = useQuery({
-    queryKey: ['weight-records', selectedPetId],
+  const latestQuery = useQuery({
+    queryKey: ['weight-records', selectedPetId, ''],
     queryFn: () => weightApi.list({ pet_id: selectedPetId!, limit: 10 }),
+    enabled: Boolean(selectedPetId),
+  });
+
+  const weightsQuery = useQuery({
+    queryKey: ['weight-records', selectedPetId, excludeKey],
+    queryFn: () => weightApi.list({
+      pet_id: selectedPetId!,
+      limit: 10,
+      exclude_tags: excludedTags.length > 0 ? excludedTags : undefined,
+    }),
+    enabled: Boolean(selectedPetId),
+  });
+
+  const tagsQuery = useQuery({
+    queryKey: ['weight-tags', selectedPetId],
+    queryFn: () => weightApi.tags(selectedPetId!),
     enabled: Boolean(selectedPetId),
   });
 
@@ -74,6 +98,7 @@ export default function HealthPage() {
 
   function invalidateWeightQueries() {
     queryClient.invalidateQueries({ queryKey: ['weight-records', selectedPetId] });
+    queryClient.invalidateQueries({ queryKey: ['weight-tags', selectedPetId] });
     queryClient.invalidateQueries({ queryKey: ['weight-summary'] });
     queryClient.invalidateQueries({ queryKey: ['pets', selectedPetId] });
     queryClient.invalidateQueries({ queryKey: ['pets'] });
@@ -104,8 +129,13 @@ export default function HealthPage() {
   if (petsLoading) return <div className="loading-state">Loading…</div>;
   if (!selectedPetId) return <NoPetSelected />;
 
-  const records = (weightsQuery.data ?? []).filter((r) => r.local_date && r.weight_kg != null);
-  const latest = records[0];
+  const fetched = Array.isArray(weightsQuery.data) ? weightsQuery.data : (latestQuery.data ?? []);
+  const records = fetched
+    .filter((r) => r.local_date && r.weight_kg != null)
+    .filter((r) => excludedTags.length === 0 || !weightNoteHasAnyTag(r.note, excludedTags));
+  const latest = (latestQuery.data ?? []).find((r) => r.local_date && r.weight_kg != null);
+  const tagOptions = tagsQuery.data ?? [];
+  const showRecentRecords = (latestQuery.data ?? []).length > 0 || excludedTags.length > 0;
   const hasActiveTreatmentPlan = hasActiveAssignmentOn(assignmentsQuery.data ?? [], today);
 
   function formatRecordWhen(measuredAt: string, localDate: string): string {
@@ -217,24 +247,37 @@ export default function HealthPage() {
         </div>}
       </section>
 
-      {records.length > 0 && (
+      {showRecentRecords && (
         <section className="panel">
           <div className="section-heading">
             <div>
               <p className="eyebrow">Measurements</p>
               <h3>Recent records</h3>
             </div>
-            <span className="muted-text" style={{ fontSize: '0.82rem' }}>Last {records.length}</span>
+            <div className="weight-record-heading-actions">
+              <span className="muted-text" style={{ fontSize: '0.82rem' }}>
+                Last {records.length}
+              </span>
+              <WeightRecordTagFilter
+                tags={tagOptions}
+                excluded={excludedTags}
+                onChange={(excluded) => setTagFilter({ petId: selectedPetId, excluded })}
+              />
+            </div>
           </div>
-          <WeightRecordList
-            records={records}
-            canWrite={canWrite}
-            formatWhen={(record) => formatRecordWhen(record.measured_at, record.local_date)}
-            updatingId={updateMutation.isPending ? updateMutation.variables?.id : undefined}
-            deletingId={deleteMutation.isPending ? deleteMutation.variables : undefined}
-            onUpdateNote={(id, note) => updateMutation.mutate({ id, note })}
-            onDelete={(id) => deleteMutation.mutate(id)}
-          />
+          {records.length > 0 ? (
+            <WeightRecordList
+              records={records}
+              canWrite={canWrite}
+              formatWhen={(record) => formatRecordWhen(record.measured_at, record.local_date)}
+              updatingId={updateMutation.isPending ? updateMutation.variables?.id : undefined}
+              deletingId={deleteMutation.isPending ? deleteMutation.variables : undefined}
+              onUpdateNote={(id, note) => updateMutation.mutate({ id, note })}
+              onDelete={(id) => deleteMutation.mutate(id)}
+            />
+          ) : (
+            <p className="muted-text">No records match this filter.</p>
+          )}
         </section>
       )}
     </div>

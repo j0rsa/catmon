@@ -26,6 +26,12 @@ export interface WeightRecordFilters {
   date_to?: string;
   limit?: number;
   offset?: number;
+  exclude_tags?: string[];
+}
+
+export interface WeightTagCount {
+  tag: string;
+  count: number;
 }
 
 function toQueryString(params: Record<string, string | number | undefined>): string {
@@ -72,10 +78,17 @@ export interface UpdateWeightRecord {
 }
 
 export const weightApi = {
-  list: (filters: WeightRecordFilters = {}) =>
-    api.get<WeightRecord[]>(
-      `/health/weight${toQueryString(filters as Record<string, string | number | undefined>)}`,
-    ),
+  list: (filters: WeightRecordFilters = {}) => {
+    const { exclude_tags, ...rest } = filters;
+    return api.get<WeightRecord[]>(
+      `/health/weight${toQueryString({
+        ...(rest as Record<string, string | number | undefined>),
+        exclude_tags: exclude_tags && exclude_tags.length > 0 ? exclude_tags.join(',') : undefined,
+      })}`,
+    );
+  },
+  tags: (petId: string) =>
+    api.get<WeightTagCount[]>(`/health/weight/tags${toQueryString({ pet_id: petId })}`),
   stats: (petId: string, dateFrom: string, dateTo: string) =>
     api.get<WeightStats>(`/health/weight/stats?pet_id=${encodeURIComponent(petId)}&date_from=${dateFrom}&date_to=${dateTo}`),
   summary: (filters: WeightSummaryFilters) =>

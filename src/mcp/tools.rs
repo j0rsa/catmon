@@ -494,15 +494,27 @@ fn tool_list() -> Value {
             // ── Weight records ───────────────────────────────────────────────
             {
                 "name": "weight.records.list",
-                "description": "List weight records for a pet. Without date_from/date_to returns the last 10 records (newest first). With a date range returns all matches (oldest first) for charting.",
+                "description": "List weight records for a pet. Without date_from/date_to returns the last 10 records (newest first). With a date range returns all matches (oldest first) for charting. Pass exclude_tags as a comma-separated list (e.g. Petkit,manual) to hide records that carry those hashtags.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "pet_id":    { "type": "string", "format": "uuid" },
-                        "date_from": { "type": "string", "format": "date" },
-                        "date_to":   { "type": "string", "format": "date" },
-                        "limit":     { "type": "integer" },
-                        "offset":    { "type": "integer" }
+                        "pet_id":       { "type": "string", "format": "uuid" },
+                        "date_from":    { "type": "string", "format": "date" },
+                        "date_to":      { "type": "string", "format": "date" },
+                        "limit":        { "type": "integer" },
+                        "offset":       { "type": "integer" },
+                        "exclude_tags": { "type": "string", "description": "Comma-separated hashtags to hide, without the # prefix." }
+                    }
+                }
+            },
+            {
+                "name": "weight.records.tags",
+                "description": "List distinct hashtags used on a pet's weight notes, with how many records carry each tag.",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["pet_id"],
+                    "properties": {
+                        "pet_id": { "type": "string", "format": "uuid" }
                     }
                 }
             },
@@ -1294,6 +1306,13 @@ pub async fn dispatch(
             let records = weight_service::list(pool, filters).await?;
             Ok(json!(records))
         }
+        "weight.records.tags" => {
+            let pet_id = params["pet_id"]
+                .as_str()
+                .ok_or_else(|| AppError::BadRequest("pet_id required".to_string()))?;
+            let tags = weight_service::list_tags(pool, pet_id).await?;
+            Ok(json!(tags))
+        }
         "weight.records.create" => {
             let req: CreateWeightRecord =
                 serde_json::from_value(params).map_err(|e| AppError::BadRequest(e.to_string()))?;
@@ -1536,6 +1555,7 @@ pub async fn dispatch(
                         date_to: None,
                         limit: Some(10),
                         offset: None,
+                        exclude_tags: None,
                     }
                 ),
                 weight_service::stats(pool, &pet_id_str, &thirty_days_ago, &today),

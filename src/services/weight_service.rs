@@ -1,6 +1,6 @@
 use crate::domain::weight::{
     summarize_by_tag, CreateWeightRecord, UpdateWeightRecord, WeightGroupBy, WeightRecord,
-    WeightRecordFilters, WeightStats,
+    WeightRecordFilters, WeightStats, WeightTagCount,
 };
 use crate::error::{AppError, AppResult};
 use crate::repo::{pets, weight_records};
@@ -11,6 +11,11 @@ use uuid::Uuid;
 #[tracing::instrument(skip(pool))]
 pub async fn list(pool: &SqlitePool, filters: WeightRecordFilters) -> AppResult<Vec<WeightRecord>> {
     weight_records::list(pool, &filters).await
+}
+
+#[tracing::instrument(skip(pool))]
+pub async fn list_tags(pool: &SqlitePool, pet_id: &str) -> AppResult<Vec<WeightTagCount>> {
+    weight_records::list_tags(pool, pet_id).await
 }
 
 #[tracing::instrument(skip(pool))]
@@ -82,6 +87,7 @@ pub async fn summary(
                     date_to: Some(date_to.to_string()),
                     limit: None,
                     offset: None,
+                    exclude_tags: None,
                 },
             )
             .await?;

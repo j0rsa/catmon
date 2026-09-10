@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { withHealthPage } from '../stories/decorators';
-import { asNarrowStory } from '../stories/viewport';
+import { asNarrowStory, assertFitsNarrowViewport, assertPopoverFitsFrame } from '../stories/viewport';
 import HealthPage from './HealthPage';
 
 const meta = {
@@ -23,6 +23,7 @@ export const WithWeightHistory: Story = {
     await expect(canvas.getByRole('heading', { name: 'Recent records' })).toBeInTheDocument();
     await expect(canvas.getAllByRole('button', { name: 'Delete' }).length).toBeGreaterThan(0);
     await expect(canvas.getAllByText('#Petkit').length).toBeGreaterThan(0);
+    await expect(canvas.getByRole('button', { name: 'Filter weight records' })).toBeInTheDocument();
   },
 };
 
@@ -67,3 +68,25 @@ export const EditNote: Story = {
 export const WithWeightHistoryNarrow = asNarrowStory(WithWeightHistory);
 export const DenseHistoryNarrow = asNarrowStory(DenseHistory);
 export const EditNoteNarrow = asNarrowStory(EditNote);
+
+export const FilterHidesTag: Story = {
+  decorators: [withHealthPage()],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const panel = canvas.getByRole('heading', { name: 'Recent records' }).closest('.panel');
+    await expect(panel).toBeTruthy();
+    const records = within(panel as HTMLElement);
+    await userEvent.click(records.getByRole('button', { name: 'Filter weight records' }));
+    const dialog = records.getByRole('dialog', { name: 'Filter weight records' });
+    await expect(dialog).toBeVisible();
+    await userEvent.click(records.getByRole('checkbox', { name: 'Hide #Petkit' }));
+    const list = (panel as HTMLElement).querySelector('.weight-record-list');
+    await expect(list).toBeTruthy();
+    await expect(within(list as HTMLElement).queryByText('#Petkit')).not.toBeInTheDocument();
+    await expect(within(list as HTMLElement).getAllByText('#manual').length).toBeGreaterThan(0);
+    assertPopoverFitsFrame(canvasElement, dialog);
+    assertFitsNarrowViewport(canvasElement);
+  },
+};
+
+export const FilterHidesTagNarrow = asNarrowStory(FilterHidesTag);

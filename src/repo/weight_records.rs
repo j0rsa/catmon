@@ -1,6 +1,7 @@
 use crate::domain::weight::{
-    normalize_weight_note, CreateWeightRecord, UpdateWeightRecord, WeightRecord,
-    WeightRecordFilters, WeightStats,
+    collect_tag_counts, normalize_weight_note, note_has_any_tag, parse_exclude_tags,
+    CreateWeightRecord, UpdateWeightRecord, WeightRecord, WeightRecordFilters, WeightStats,
+    WeightTagCount,
 };
 use crate::error::{AppError, AppResult};
 use chrono::Utc;
@@ -15,16 +16,43 @@ pub async fn list(
     pool: &SqlitePool,
     filters: &WeightRecordFilters,
 ) -> AppResult<Vec<WeightRecord>> {
+    let exclude = parse_exclude_tags(filters.exclude_tags.as_deref());
     let has_date_range = filters.date_from.is_some() || filters.date_to.is_some();
-    let limit = filters.limit.or(if has_date_range {
+    let page_limit = filters.limit.or(if has_date_range {
         None
     } else {
         Some(DEFAULT_RECENT_LIMIT)
     });
-    let order_desc = !has_date_range;
 
     let mut effective = filters.clone();
-    effective.limit = limit;
+    if exclude.is_empty() {
+        effective.limit = page_limit;
+    } else {
+        // Fetch the full candidate set, hide excluded tags, then page.
+        effective.limit = None;
+        effective.offset = None;
+    }
+
+    let mut records = list_sql(pool, &effective).await?;
+    if !exclude.is_empty() {
+        records.retain(|record| !note_has_any_tag(record.note.as_deref(), &exclude));
+        let offset = filters.offset.unwrap_or(0).max(0) as usize;
+        if offset > 0 {
+            records = records.into_iter().skip(offset).collect();
+        }
+        if let Some(limit) = page_limit {
+            records.truncate(limit.max(0) as usize);
+        }
+    }
+    Ok(records)
+}
+
+async fn list_sql(
+    pool: &SqlitePool,
+    effective: &WeightRecordFilters,
+) -> AppResult<Vec<WeightRecord>> {
+    let has_date_range = effective.date_from.is_some() || effective.date_to.is_some();
+    let order_desc = !has_date_range;
 
     let mut query = String::from(
         "SELECT id, pet_id, measured_at, local_date, weight_kg, note, source_type, created_at FROM weight_records WHERE 1=1",
@@ -67,6 +95,18 @@ pub async fn list(
     }
 
     Ok(q.fetch_all(pool).await?)
+}
+
+#[tracing::instrument(skip(pool))]
+pub async fn list_tags(pool: &SqlitePool, pet_id: &str) -> AppResult<Vec<WeightTagCount>> {
+    let pet_uuid = Uuid::parse_str(pet_id)
+        .map_err(|_| AppError::BadRequest(format!("invalid pet_id: {pet_id}")))?;
+    let notes: Vec<Option<String>> =
+        sqlx::query_scalar("SELECT note FROM weight_records WHERE pet_id = ?")
+            .bind(pet_uuid)
+            .fetch_all(pool)
+            .await?;
+    Ok(collect_tag_counts(notes))
 }
 
 #[tracing::instrument(skip(pool))]

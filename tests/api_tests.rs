@@ -371,6 +371,7 @@ async fn mcp_tools_list_names_have_no_slashes() {
     let names: Vec<_> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     assert!(names.contains(&"weight.records.create"));
     assert!(names.contains(&"weight.records.update"));
+    assert!(names.contains(&"weight.records.tags"));
     assert!(names.contains(&"pets.list"));
     assert!(names.contains(&"health.meds.assignments.end"));
     assert!(names.contains(&"health.meds.assignments.delete"));
@@ -2837,6 +2838,67 @@ async fn weight_summary_group_by_tag_splits_series() {
     );
     assert_eq!(manual["count"].as_i64(), Some(1));
     assert_eq!(manual["avg_kg"].as_f64(), Some(4.3));
+}
+
+#[actix_web::test]
+async fn weight_tags_and_exclude_filter() {
+    let (app, _state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "WeightTagFilter");
+
+    for (i, (kg, note)) in [
+        (4.70_f64, "#Petkit a"),
+        (4.71, "#Petkit b"),
+        (4.72, "#Petkit c"),
+        (4.10, "#manual hand"),
+        (4.11, "#vet clinic"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/health/weight")
+            .set_json(serde_json::json!({
+                "pet_id": pet_id,
+                "measured_at": format!("2026-06-15T{:02}:00:00", i),
+                "weight_kg": kg,
+                "note": note,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+    }
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/api/v1/health/weight/tags?pet_id={pet_id}"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let tags: serde_json::Value = test::read_body_json(resp).await;
+    let tags = tags.as_array().expect("tag list");
+    assert_eq!(tags[0]["tag"].as_str(), Some("Petkit"));
+    assert_eq!(tags[0]["count"].as_i64(), Some(3));
+    let names: Vec<&str> = tags.iter().filter_map(|t| t["tag"].as_str()).collect();
+    assert!(names.contains(&"manual"));
+    assert!(names.contains(&"vet"));
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/v1/health/weight?pet_id={pet_id}&exclude_tags=Petkit"
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let list: serde_json::Value = test::read_body_json(resp).await;
+    let notes: Vec<&str> = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["note"].as_str().unwrap())
+        .collect();
+    assert_eq!(notes.len(), 2);
+    assert!(notes.iter().all(|n| !n.contains("#Petkit")));
+    assert!(notes.iter().any(|n| n.contains("#manual")));
+    assert!(notes.iter().any(|n| n.contains("#vet")));
 }
 
 // ── Health state records ────────────────────────────────────────────────────

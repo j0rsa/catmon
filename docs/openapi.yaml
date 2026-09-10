@@ -1279,6 +1279,14 @@ paths:
           required: false
           description: Max records to return. Defaults to 10 when no date_from/date_to filter is set.
           schema: { type: integer, format: int64, minimum: 1, default: 10 }
+        - name: exclude_tags
+          in: query
+          required: false
+          description: |
+            Comma-separated hashtags to hide (without `#`). Records that carry
+            any of these tags are omitted; the default last-10 / date-range
+            paging applies to what remains.
+          schema: { type: string, example: 'Petkit,manual' }
       responses:
         '200':
           description: List of weight records
@@ -1396,6 +1404,36 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/WeightSummaryBucket'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /health/weight/tags:
+    get:
+      tags:
+        - Weight Records
+      summary: List distinct weight-note tags for a pet
+      x-required-scope: api_read
+      description: |
+        Returns every hashtag used on the pet's weight notes, with how many
+        records carry that tag. Notes with no hashtag count as `manual`.
+      parameters:
+        - name: pet_id
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Distinct tags ordered by record count
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WeightTagCount'
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -4900,6 +4938,19 @@ components:
         max_kg:
           type: number
           format: double
+        count:
+          type: integer
+          format: int64
+
+    WeightTagCount:
+      type: object
+      description: How many of a pet's weight records carry a given hashtag
+      required: [tag, count]
+      properties:
+        tag:
+          type: string
+          description: Hashtag without the leading `#`
+          example: Petkit
         count:
           type: integer
           format: int64

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractWeightTags, normalizeWeightNote, parseWeightNote, primaryWeightTag } from './weightNote';
+import { extractWeightTags, normalizeWeightNote, parseWeightNote, primaryWeightTag, tagsForWeightNote, weightNoteHasAnyTag } from './weightNote';
 
 describe('normalizeWeightNote', () => {
   it('tags empty notes as #manual', () => {
@@ -42,5 +42,12 @@ describe('parseWeightNote', () => {
     expect(extractWeightTags('#Petkit #home toileting')).toEqual(['Petkit', 'home']);
     expect(primaryWeightTag('#Petkit toileting')).toBe('Petkit');
     expect(primaryWeightTag('no tags')).toBe('manual');
+  });
+
+  it('matches exclude tags case-insensitively and treats untagged notes as manual', () => {
+    expect(weightNoteHasAnyTag('#Petkit toileting', ['petkit'])).toBe(true);
+    expect(weightNoteHasAnyTag('#Petkit toileting', ['manual'])).toBe(false);
+    expect(weightNoteHasAnyTag(null, ['manual'])).toBe(true);
+    expect(tagsForWeightNote('#Petkit #home')).toEqual(['Petkit', 'home']);
   });
 });

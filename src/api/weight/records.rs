@@ -102,11 +102,30 @@ pub async fn summary(
     Ok(HttpResponse::Ok().json(buckets))
 }
 
+#[derive(Deserialize)]
+pub struct TagsQuery {
+    pub pet_id: String,
+}
+
+#[get("/tags")]
+#[require_scope("api_read")]
+pub async fn list_tags(
+    state: web::Data<AppState>,
+    query: web::Query<TagsQuery>,
+) -> AppResult<HttpResponse> {
+    if query.pet_id.is_empty() {
+        return Err(AppError::BadRequest("pet_id required".to_string()));
+    }
+    let tags = weight_service::list_tags(&state.pool, &query.pet_id).await?;
+    Ok(HttpResponse::Ok().json(tags))
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(list_records)
         .service(create_record)
         .service(stats)
         .service(summary)
+        .service(list_tags)
         .service(update_record)
         .service(delete_record);
 }

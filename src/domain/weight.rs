@@ -51,6 +51,16 @@ pub struct WeightRecordFilters {
     pub date_to: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    /// Comma-separated hashtags to hide (`Petkit,manual`). Matching is
+    /// case-insensitive and looks at every tag in the note.
+    #[serde(default)]
+    pub exclude_tags: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WeightTagCount {
+    pub tag: String,
+    pub count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -108,6 +118,81 @@ pub fn extract_tags(note: &str) -> Vec<String> {
 pub fn primary_tag(note: Option<&str>) -> String {
     note.and_then(|text| extract_tags(text).into_iter().next())
         .unwrap_or_else(|| MANUAL_TAG.to_string())
+}
+
+/// Tags present on a note. Notes with no hashtag count as `manual`.
+pub fn tags_for_note(note: Option<&str>) -> Vec<String> {
+    let tags = extract_tags(note.unwrap_or(""));
+    if tags.is_empty() {
+        vec![MANUAL_TAG.to_string()]
+    } else {
+        tags
+    }
+}
+
+/// Parse a comma-separated exclude list, dropping empty fragments.
+pub fn parse_exclude_tags(raw: Option<&str>) -> Vec<String> {
+    raw.unwrap_or("")
+        .split(',')
+        .map(str::trim)
+        .filter(|tag| !tag.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// True when the note carries any of `tags` (case-insensitive).
+pub fn note_has_any_tag(note: Option<&str>, tags: &[String]) -> bool {
+    if tags.is_empty() {
+        return false;
+    }
+    let want: std::collections::HashSet<String> =
+        tags.iter().map(|tag| tag.to_ascii_lowercase()).collect();
+    tags_for_note(note)
+        .iter()
+        .any(|tag| want.contains(&tag.to_ascii_lowercase()))
+}
+
+/// Distinct tags across notes, with per-note uniqueness and count order.
+pub fn collect_tag_counts<I, S>(notes: I) -> Vec<WeightTagCount>
+where
+    I: IntoIterator<Item = Option<S>>,
+    S: AsRef<str>,
+{
+    use std::collections::{BTreeMap, HashSet};
+
+    struct Acc {
+        tag: String,
+        count: i64,
+    }
+
+    let mut map: BTreeMap<String, Acc> = BTreeMap::new();
+    for note in notes {
+        let tags = tags_for_note(note.as_ref().map(|s| s.as_ref()));
+        let mut seen = HashSet::new();
+        for tag in tags {
+            let key = tag.to_ascii_lowercase();
+            if !seen.insert(key.clone()) {
+                continue;
+            }
+            map.entry(key)
+                .and_modify(|acc| acc.count += 1)
+                .or_insert(Acc { tag, count: 1 });
+        }
+    }
+
+    let mut out: Vec<WeightTagCount> = map
+        .into_values()
+        .map(|acc| WeightTagCount {
+            tag: acc.tag,
+            count: acc.count,
+        })
+        .collect();
+    out.sort_by(|a, b| {
+        b.count
+            .cmp(&a.count)
+            .then_with(|| a.tag.to_ascii_lowercase().cmp(&b.tag.to_ascii_lowercase()))
+    });
+    out
 }
 
 /// Ensure every weight note has at least one hashtag.
@@ -280,6 +365,52 @@ mod tests {
         assert_eq!(primary_tag(Some("Petkit toileting")), "manual");
         assert_eq!(primary_tag(Some("#Petkit toileting")), "Petkit");
         assert_eq!(primary_tag(None), "manual");
+    }
+
+    #[test]
+    fn collect_tag_counts_is_distinct_and_counted() {
+        let notes = [
+            Some("#Petkit toileting"),
+            Some("#Petkit #home"),
+            Some("#manual"),
+            Some("#Petkit toileting"),
+            None,
+        ];
+        let tags = collect_tag_counts(notes);
+        assert_eq!(
+            tags,
+            vec![
+                WeightTagCount {
+                    tag: "Petkit".into(),
+                    count: 3
+                },
+                WeightTagCount {
+                    tag: "manual".into(),
+                    count: 2
+                },
+                WeightTagCount {
+                    tag: "home".into(),
+                    count: 1
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn note_has_any_tag_is_case_insensitive() {
+        assert!(note_has_any_tag(
+            Some("#Petkit toileting"),
+            &["petkit".into()]
+        ));
+        assert!(!note_has_any_tag(
+            Some("#Petkit toileting"),
+            &["manual".into()]
+        ));
+        assert!(note_has_any_tag(None, &["manual".into()]));
+        assert_eq!(
+            parse_exclude_tags(Some(" Petkit, manual ,")),
+            vec!["Petkit".to_string(), "manual".to_string()]
+        );
     }
 
     #[test]

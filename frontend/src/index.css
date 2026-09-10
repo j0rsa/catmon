@@ -3222,6 +3222,50 @@ pre {
   }
 }
 
+.weight-record-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+  margin-left: auto;
+  align-self: flex-end;
+}
+
+.weight-record-filter {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.weight-record-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.weight-record-filter-count {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.75rem;
+  min-width: 1.05rem;
+  text-align: center;
+}
+
+.weight-record-filter-popover.widget-settings-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 15.5rem;
+  max-width: min(15.5rem, calc(100vw - 2rem));
+}
+
+.weight-record-filter-popover .widget-settings-title {
+  text-transform: none;
+}
+
+.weight-record-filter-tag-count {
+  margin-left: auto;
+  font-size: 0.75rem;
+}
+
 .weight-record-list {
   list-style: none;
   margin: 0;

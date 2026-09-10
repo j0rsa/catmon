@@ -7,6 +7,7 @@ import {
   redirectToLogin,
   storeToken,
 } from '../lib/auth';
+import { markPostAuthViewportSync } from '../lib/viewportChrome';
 
 export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
@@ -86,11 +87,10 @@ export default function AuthCallbackPage() {
       storeToken(idToken);
       const { clearSignedOut } = await import('../lib/auth');
       clearSignedOut();
-      // After the OIDC redirect the PWA WebView may still be in the
-      // "browser" rendering context (Safari chrome, wrong safe-area
-      // insets). A second reload after landing reinitialises the
-      // standalone viewport so env(safe-area-inset-*) re-evaluates.
-      sessionStorage.setItem('pwa-post-auth-reload', '1');
+      // After the OIDC redirect iOS PWAs often mis-measure the layout
+      // viewport; main.tsx runs an aggressive visualViewport re-sync on
+      // the next load instead of a plain reload (which is not enough).
+      markPostAuthViewportSync();
       window.location.replace(consumeRedirectPath());
     }
 

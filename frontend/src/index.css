@@ -14,6 +14,8 @@
   --device-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: var(--device-top);
   --safe-bottom: var(--device-bottom);
+  /* iOS PWA can mis-measure the layout viewport after OIDC; JS shifts fixed chrome. */
+  --viewport-shift-bottom: 0px;
 
   /* Height the fixed demo banner occupies; 0 when it is not mounted. */
   --demo-banner-height: 0px;
@@ -1023,6 +1025,7 @@ pre {
     right: 0;
     height: calc(4rem + var(--safe-bottom));
     padding-bottom: var(--safe-bottom);
+    transform: translateY(var(--viewport-shift-bottom, 0px));
     background: var(--surface-sidebar);
     border-top: 1px solid var(--border-subtle);
     z-index: 100;
@@ -1114,6 +1117,7 @@ pre {
   display: none;
   position: fixed;
   inset: 0;
+  bottom: calc(-1 * var(--viewport-shift-bottom, 0px));
   background: rgba(0, 0, 0, 0.5);
   z-index: 101;
 }
@@ -1129,6 +1133,7 @@ pre {
   display: none;
   position: fixed;
   bottom: calc(4rem + var(--safe-bottom));
+  transform: translateY(var(--viewport-shift-bottom, 0px));
   left: 0;
   right: 0;
   background: var(--surface-elevated);

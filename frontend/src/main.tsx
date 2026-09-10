@@ -10,6 +10,13 @@ import './index.css';
 
 initPwaUpdates();
 
+if ('scrollRestoration' in history) {
+  // Browser scroll restoration (especially after service-worker notification
+  // navigation) fights React Router + deep-link scrolling and can leave the
+  // mobile bottom nav visually detached from the viewport edge on iOS PWAs.
+  history.scrollRestoration = 'manual';
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

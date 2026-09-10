@@ -58,8 +58,11 @@ struct ParsedScheduleRules {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScheduleWindow {
+    /// Scheduled feeding time (`HH:MM`), floored to a 10-minute step on save.
     pub from: String,
-    pub to: String,
+    /// Legacy interval end — ignored; kept so older stored rules still deserialize.
+    #[serde(default)]
+    pub to: Option<String>,
     pub min: f64,
     pub max: f64,
     pub note: Option<String>,
@@ -105,9 +108,7 @@ pub fn parse_liquid_schedule_windows(rules_json: &str) -> Vec<ScheduleWindow> {
     parse_schedule_windows(rules_json)
 }
 
-/// Cumulative amount due once each window's `from` time has been reached.
-/// Feeding reminders use [`schedule_projection_at`] (midpoint stepping, same
-/// as the chart) rather than this window-start total.
+/// Cumulative amount due once each window's scheduled `from` time has passed.
 pub fn schedule_due_at(windows: &[ScheduleWindow], at_minutes: i32) -> f64 {
     let mut due = 0.0;
     for window in windows {
@@ -124,15 +125,22 @@ pub fn schedule_due_at(windows: &[ScheduleWindow], at_minutes: i32) -> f64 {
     due
 }
 
-/// Windows whose start time has been reached and that contribute an amount.
-pub fn reached_feeding_windows(
+/// Windows whose scheduled feeding time falls in the current 10-minute slot.
+/// Feeding reminders fire once per slot when intake is below the cumulative
+/// schedule projection — not on every later tick while still behind.
+pub fn feeding_windows_in_slot(
     windows: &[ScheduleWindow],
     at_minutes: i32,
 ) -> Vec<&ScheduleWindow> {
+    let slot_start = (at_minutes / FEEDING_TIME_STEP_MINUTES) * FEEDING_TIME_STEP_MINUTES;
+    let slot_end = slot_start + FEEDING_TIME_STEP_MINUTES;
+
     windows
         .iter()
         .filter(|window| {
-            window.max > 0.0 && parse_hhmm(&window.from).is_some_and(|from_m| at_minutes >= from_m)
+            window.max > 0.0
+                && parse_hhmm(&window.from)
+                    .is_some_and(|from_m| from_m >= slot_start && from_m < slot_end)
         })
         .collect()
 }
@@ -162,14 +170,8 @@ pub fn parse_hhmm(time: &str) -> Option<i32> {
     Some(hours * 60 + minutes)
 }
 
-pub fn window_midpoint_minutes(from: &str, to: &str) -> Option<i32> {
-    let from_m = parse_hhmm(from)?;
-    let to_m = parse_hhmm(to)?;
-    Some(((from_m + to_m) as f64 / 2.0).round() as i32)
-}
-
 /// Cumulative schedule expectation at a time-of-day, matching the frontend
-/// `buildScheduleCurve` midpoint stepping logic.
+/// `buildScheduleCurve` stepping logic (each window steps up at its `from` time).
 pub fn schedule_projection_at(windows: &[ScheduleWindow], at_minutes: i32) -> (f64, f64, f64) {
     let daily_min_ml: f64 = windows.iter().map(|w| w.min).sum();
     let daily_max_ml: f64 = windows.iter().map(|w| w.max).sum();
@@ -179,10 +181,10 @@ pub fn schedule_projection_at(windows: &[ScheduleWindow], at_minutes: i32) -> (f
 
     let mut expected_ml = 0.0;
     for window in active {
-        let Some(midpoint) = window_midpoint_minutes(&window.from, &window.to) else {
+        let Some(from_m) = parse_hhmm(&window.from) else {
             continue;
         };
-        if at_minutes >= midpoint {
+        if at_minutes >= from_m {
             expected_ml += window.max;
         }
     }
@@ -195,18 +197,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn schedule_projection_steps_at_window_midpoints() {
+    fn schedule_projection_steps_at_scheduled_times() {
         let windows = vec![
             ScheduleWindow {
                 from: "08:00".to_string(),
-                to: "10:00".to_string(),
+                to: None,
                 min: 10.0,
                 max: 100.0,
                 note: None,
             },
             ScheduleWindow {
                 from: "12:00".to_string(),
-                to: "14:00".to_string(),
+                to: None,
                 min: 20.0,
                 max: 50.0,
                 note: None,
@@ -214,19 +216,19 @@ mod tests {
         ];
 
         assert_eq!(
-            schedule_projection_at(&windows, 8 * 60 + 59),
+            schedule_projection_at(&windows, 7 * 60 + 59),
             (0.0, 30.0, 150.0)
         );
         assert_eq!(
-            schedule_projection_at(&windows, 9 * 60),
+            schedule_projection_at(&windows, 8 * 60),
             (100.0, 30.0, 150.0)
         );
         assert_eq!(
-            schedule_projection_at(&windows, 12 * 60 + 59),
+            schedule_projection_at(&windows, 11 * 60 + 59),
             (100.0, 30.0, 150.0)
         );
         assert_eq!(
-            schedule_projection_at(&windows, 13 * 60),
+            schedule_projection_at(&windows, 12 * 60),
             (150.0, 30.0, 150.0)
         );
     }
@@ -262,14 +264,14 @@ mod tests {
         let windows = vec![
             ScheduleWindow {
                 from: "08:00".to_string(),
-                to: "09:00".to_string(),
+                to: None,
                 min: 10.0,
                 max: 50.0,
                 note: None,
             },
             ScheduleWindow {
                 from: "12:00".to_string(),
-                to: "13:00".to_string(),
+                to: None,
                 min: 10.0,
                 max: 40.0,
                 note: None,
@@ -280,8 +282,9 @@ mod tests {
         assert_eq!(schedule_due_at(&windows, 8 * 60), 50.0);
         assert_eq!(schedule_due_at(&windows, 11 * 60 + 59), 50.0);
         assert_eq!(schedule_due_at(&windows, 12 * 60), 90.0);
-        assert_eq!(reached_feeding_windows(&windows, 8 * 60).len(), 1);
-        assert_eq!(reached_feeding_windows(&windows, 12 * 60).len(), 2);
+        assert_eq!(feeding_windows_in_slot(&windows, 8 * 60).len(), 1);
+        assert_eq!(feeding_windows_in_slot(&windows, 8 * 60 + 10).len(), 0);
+        assert_eq!(feeding_windows_in_slot(&windows, 12 * 60).len(), 1);
     }
 
     #[test]

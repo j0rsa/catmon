@@ -4968,7 +4968,7 @@ async fn nutrition_schedule_notify_roundtrip_and_floors_times() {
             "rules": {
                 "type": "liquid",
                 "windows": [
-                    { "from": "08:07", "to": "09:04", "min": 10, "max": 50 }
+                    { "from": "08:07", "min": 10, "max": 50 }
                 ]
             }
         }))
@@ -4980,7 +4980,7 @@ async fn nutrition_schedule_notify_roundtrip_and_floors_times() {
     let rules: serde_json::Value =
         serde_json::from_str(created["rules_json"].as_str().unwrap()).unwrap();
     assert_eq!(rules["windows"][0]["from"], "08:00");
-    assert_eq!(rules["windows"][0]["to"], "09:00");
+    assert!(rules["windows"][0].get("to").is_none());
 
     let schedule_id = created["id"].as_str().unwrap();
     let req = test::TestRequest::patch()
@@ -4994,7 +4994,36 @@ async fn nutrition_schedule_notify_roundtrip_and_floors_times() {
 }
 
 #[actix_web::test]
-async fn feeding_nudge_notifies_when_behind_at_window_start() {
+async fn nutrition_schedule_windows_sorted_by_time_on_save() {
+    let (app, _state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "SortedWindows");
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/nutrition/schedules")
+        .set_json(serde_json::json!({
+            "pet_id": pet_id,
+            "name": "Meals",
+            "rules": {
+                "type": "food",
+                "windows": [
+                    { "from": "22:00", "min": 10, "max": 12 },
+                    { "from": "01:00", "min": 8, "max": 10 }
+                ]
+            }
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 201);
+    let created: serde_json::Value = test::read_body_json(resp).await;
+    let rules: serde_json::Value =
+        serde_json::from_str(created["rules_json"].as_str().unwrap()).unwrap();
+    let windows = rules["windows"].as_array().unwrap();
+    assert_eq!(windows[0]["from"], "01:00");
+    assert_eq!(windows[1]["from"], "22:00");
+}
+
+#[actix_web::test]
+async fn feeding_nudge_notifies_when_behind_at_scheduled_time() {
     use chrono::TimeZone;
     use petmon::domain::notification::KIND_FEEDING_NUDGE;
 
@@ -5010,8 +5039,8 @@ async fn feeding_nudge_notifies_when_behind_at_window_start() {
             "rules": {
                 "type": "liquid",
                 "windows": [
-                    { "from": "08:00", "to": "09:00", "min": 10, "max": 50 },
-                    { "from": "12:00", "to": "13:00", "min": 10, "max": 40 }
+                    { "from": "08:00", "min": 10, "max": 50 },
+                    { "from": "12:00", "min": 10, "max": 40 }
                 ]
             }
         }))
@@ -5034,13 +5063,13 @@ async fn feeding_nudge_notifies_when_behind_at_window_start() {
     let notes: serde_json::Value = test::read_body_json(resp).await;
     assert!(
         notes.as_array().unwrap().is_empty(),
-        "no notify before window start"
+        "no notify before scheduled feeding time"
     );
 
-    let at_midpoint = chrono_tz::UTC
-        .with_ymd_and_hms(2026, 7, 18, 8, 30, 0)
+    let at_feeding_time = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 8, 0, 0)
         .unwrap();
-    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_midpoint)
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_feeding_time)
         .await
         .unwrap();
 
@@ -5058,7 +5087,7 @@ async fn feeding_nudge_notifies_when_behind_at_window_start() {
     assert_eq!(notes[0]["body"].as_str(), Some("Hydration · 08:00"));
     assert_eq!(notes[0]["link_path"].as_str(), Some("/nutrition"));
 
-    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_midpoint)
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_feeding_time)
         .await
         .unwrap();
     let req = test::TestRequest::get()
@@ -5072,10 +5101,27 @@ async fn feeding_nudge_notifies_when_behind_at_window_start() {
         "duplicate feeding reminder must be suppressed"
     );
 
-    let midday_midpoint = chrono_tz::UTC
-        .with_ymd_and_hms(2026, 7, 18, 12, 30, 0)
+    let later_same_slot = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 8, 20, 0)
         .unwrap();
-    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, midday_midpoint)
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, later_same_slot)
+        .await
+        .unwrap();
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications?unread_only=true")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let notes: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(
+        notes.as_array().unwrap().len(),
+        1,
+        "still behind later in the day must not re-nudge until the next feeding time"
+    );
+
+    let midday_feeding = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 12, 0, 0)
+        .unwrap();
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, midday_feeding)
         .await
         .unwrap();
     let req = test::TestRequest::get()
@@ -5090,10 +5136,9 @@ async fn feeding_nudge_notifies_when_behind_at_window_start() {
     );
 }
 
-/// Chart schedule at 14:02 is 121 ml; intake 136 ml must not nudge when the
-/// 14:00 window has started but its midpoint (14:30) has not.
+/// Intake ahead of the cumulative schedule at a feeding time must not nudge.
 #[actix_web::test]
-async fn feeding_nudge_skips_when_ahead_of_chart_schedule_at_window_start() {
+async fn feeding_nudge_skips_when_ahead_of_chart_schedule_at_feeding_time() {
     use chrono::TimeZone;
 
     let (app, state) = build_dev_app!();
@@ -5108,47 +5153,30 @@ async fn feeding_nudge_skips_when_ahead_of_chart_schedule_at_window_start() {
             "rules": {
                 "type": "liquid",
                 "windows": [
-                    { "from": "02:00", "to": "03:00", "min": 20, "max": 26 },
-                    { "from": "05:00", "to": "06:00", "min": 20, "max": 26 },
-                    { "from": "08:00", "to": "09:00", "min": 20, "max": 26 },
-                    { "from": "09:30", "to": "10:00", "min": 15, "max": 17 },
-                    { "from": "11:00", "to": "12:00", "min": 20, "max": 26 },
-                    { "from": "14:00", "to": "15:00", "min": 20, "max": 26 }
+                    { "from": "14:00", "min": 20, "max": 26 }
                 ]
             }
         }))
         .to_request();
     assert_eq!(test::call_service(&app, req).await.status(), 201);
 
-    for record in [
-        serde_json::json!({
-            "pet_id": pet_id,
-            "category": "wet_food",
-            "amount": 47,
-            "unit": "g",
-            "occurred_at": "2026-07-18T08:00:00",
-            "local_date": "2026-07-18"
-        }),
-        serde_json::json!({
+    let req = test::TestRequest::post()
+        .uri("/api/v1/nutrition/records")
+        .set_json(serde_json::json!({
             "pet_id": pet_id,
             "category": "liquids",
-            "amount": 100,
+            "amount": 30,
             "unit": "ml",
-            "occurred_at": "2026-07-18T14:01:00",
+            "occurred_at": "2026-07-18T13:50:00",
             "local_date": "2026-07-18"
-        }),
-    ] {
-        let req = test::TestRequest::post()
-            .uri("/api/v1/nutrition/records")
-            .set_json(record)
-            .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), 201);
-    }
+        }))
+        .to_request();
+    assert_eq!(test::call_service(&app, req).await.status(), 201);
 
-    let at_1402 = chrono_tz::UTC
-        .with_ymd_and_hms(2026, 7, 18, 14, 2, 0)
+    let at_1400 = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 14, 0, 0)
         .unwrap();
-    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_1402)
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_1400)
         .await
         .unwrap();
 
@@ -5159,7 +5187,7 @@ async fn feeding_nudge_skips_when_ahead_of_chart_schedule_at_window_start() {
     let notes: serde_json::Value = test::read_body_json(resp).await;
     assert!(
         notes.as_array().unwrap().is_empty(),
-        "136 ml total is ahead of the 121 ml chart schedule at 14:02"
+        "30 ml is ahead of the 26 ml schedule step at 14:00"
     );
 }
 
@@ -5179,7 +5207,7 @@ async fn feeding_nudge_skips_when_intake_meets_due_or_notify_off() {
             "rules": {
                 "type": "liquid",
                 "windows": [
-                    { "from": "08:00", "to": "09:00", "min": 10, "max": 50 }
+                    { "from": "08:00", "min": 10, "max": 50 }
                 ]
             }
         }))
@@ -5226,7 +5254,7 @@ async fn feeding_nudge_skips_when_intake_meets_due_or_notify_off() {
             "rules": {
                 "type": "food",
                 "windows": [
-                    { "from": "08:00", "to": "09:00", "min": 20, "max": 40 }
+                    { "from": "08:00", "min": 20, "max": 40 }
                 ]
             }
         }))
@@ -5264,17 +5292,17 @@ async fn feeding_nudge_food_schedule_uses_food_wording() {
             "rules": {
                 "type": "food",
                 "windows": [
-                    { "from": "08:00", "to": "09:00", "min": 20, "max": 40 }
+                    { "from": "08:00", "min": 20, "max": 40 }
                 ]
             }
         }))
         .to_request();
     assert_eq!(test::call_service(&app, req).await.status(), 201);
 
-    let at_midpoint = chrono_tz::UTC
-        .with_ymd_and_hms(2026, 7, 18, 8, 30, 0)
+    let at_feeding_time = chrono_tz::UTC
+        .with_ymd_and_hms(2026, 7, 18, 8, 0, 0)
         .unwrap();
-    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_midpoint)
+    petmon::services::feeding_nudge_service::run_feeding_nudge_check(&state.pool, at_feeding_time)
         .await
         .unwrap();
 
@@ -5309,7 +5337,7 @@ async fn feeding_nudge_liquid_counts_wet_food_fluid() {
             "rules": {
                 "type": "liquid",
                 "windows": [
-                    { "from": "08:00", "to": "09:00", "min": 100, "max": 190 }
+                    { "from": "08:00", "min": 100, "max": 190 }
                 ]
             }
         }))

@@ -25,7 +25,7 @@ export const WithSchedules: Story = {
     await expect(reminders).toHaveLength(2);
     await expect(reminders[0]).not.toBeChecked();
     await expect(reminders[1]).toBeChecked();
-    await expect(canvas.getAllByText(/server checks every 10 minutes/i)).toHaveLength(2);
+    await expect(canvas.getAllByText(/One reminder per feeding time per day/i)).toHaveLength(2);
   },
 };
 

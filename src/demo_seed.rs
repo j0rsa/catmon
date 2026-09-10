@@ -738,15 +738,14 @@ async fn seed_schedules(pool: &SqlitePool, demo_pets: &[Pet]) -> AppResult<usize
             serde_json::json!({
                 "type": "liquid",
                 "windows": [
-                    { "from": "06:00", "to": "07:00", "min": 12, "max": 15, "note": "First morning liquid, gentle start" },
-                    { "from": "08:30", "to": "09:30", "min": 12, "max": 15, "note": "Good second portion" },
-                    { "from": "11:00", "to": "12:00", "min": 10, "max": 13, "note": "Midday support" },
-                    { "from": "13:30", "to": "14:30", "min": 10, "max": 13, "note": "Keep it steady" },
-                    { "from": "15:30", "to": "16:30", "min": 12, "max": 15, "note": "Important afternoon portion" },
-                    { "from": "17:30", "to": "18:30", "min": 10, "max": 13, "note": "Before the fasting window" },
-                    { "from": "18:45", "to": "19:10", "min": 5,  "max": 10, "note": "Optional last small portion before cutoff" },
-                    { "from": "19:15", "to": "22:00", "min": 0,  "max": 0,  "note": "No food/liquids during this window" },
-                    { "from": "22:00", "to": "23:59", "min": 8,  "max": 15, "note": "With/after food + prednisolone, if she accepts" }
+                    { "from": "06:00", "min": 12, "max": 15, "note": "First morning liquid, gentle start" },
+                    { "from": "08:30", "min": 12, "max": 15, "note": "Good second portion" },
+                    { "from": "11:00", "min": 10, "max": 13, "note": "Midday support" },
+                    { "from": "13:30", "min": 10, "max": 13, "note": "Keep it steady" },
+                    { "from": "15:30", "min": 12, "max": 15, "note": "Important afternoon portion" },
+                    { "from": "17:30", "min": 10, "max": 13, "note": "Before the fasting window" },
+                    { "from": "18:40", "min": 5,  "max": 10, "note": "Optional last small portion before cutoff" },
+                    { "from": "22:00", "min": 8,  "max": 15, "note": "With/after food + prednisolone, if she accepts" }
                 ]
             }),
         ),
@@ -757,8 +756,8 @@ async fn seed_schedules(pool: &SqlitePool, demo_pets: &[Pet]) -> AppResult<usize
             serde_json::json!({
                 "type": "food",
                 "windows": [
-                    { "from": "08:00", "to": "08:30", "min": 75, "max": 85, "note": "Morning wet portion" },
-                    { "from": "19:00", "to": "19:30", "min": 75, "max": 85, "note": "Evening wet portion" }
+                    { "from": "08:00", "min": 75, "max": 85, "note": "Morning wet portion" },
+                    { "from": "19:00", "min": 75, "max": 85, "note": "Evening wet portion" }
                 ]
             }),
         ),
@@ -769,8 +768,8 @@ async fn seed_schedules(pool: &SqlitePool, demo_pets: &[Pet]) -> AppResult<usize
             serde_json::json!({
                 "type": "food",
                 "windows": [
-                    { "from": "07:30", "to": "08:00", "min": 280, "max": 320, "note": "Morning meal" },
-                    { "from": "18:00", "to": "18:30", "min": 90,  "max": 110, "note": "Evening dry food" }
+                    { "from": "07:30", "min": 280, "max": 320, "note": "Morning meal" },
+                    { "from": "18:00", "min": 90,  "max": 110, "note": "Evening dry food" }
                 ]
             }),
         ),

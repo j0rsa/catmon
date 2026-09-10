@@ -5,7 +5,7 @@ use sqlx::SqlitePool;
 use crate::domain::nutrition_record::NutritionRecordFilters;
 use crate::domain::nutrition_status::{
     parse_hhmm, parse_schedule_kind, parse_schedule_windows, reached_feeding_windows,
-    schedule_due_at, FEEDING_TIME_STEP_MINUTES,
+    schedule_projection_at, FEEDING_TIME_STEP_MINUTES,
 };
 use crate::error::AppResult;
 use crate::repo::{nutrition_records, nutrition_schedules, pets};
@@ -14,8 +14,9 @@ use crate::services::{notification_service, nutrition_status_service};
 const SLOT_SECS: u64 = (FEEDING_TIME_STEP_MINUTES as u64) * 60;
 
 /// Spawn the feeding-reminder worker. It runs immediately (catch-up after
-/// restart), then wakes every 10 minutes and notifies when a window start has
-/// passed and today's intake is still below the amount due at that time.
+/// restart), then wakes every 10 minutes and notifies when today's intake is
+/// still below the cumulative schedule projection (same curve as the fluid
+/// chart) for at most one newly-behind window per check.
 pub fn spawn(pool: SqlitePool, timezone: Tz) {
     tokio::spawn(async move {
         loop {
@@ -47,7 +48,7 @@ fn secs_until_next_slot<TzOffset: chrono::TimeZone>(now: DateTime<TzOffset>) -> 
 }
 
 /// For every active schedule with `notify`, send at most one reminder per
-/// reached window per day when cumulative intake is below the amount due.
+/// reached window per day when cumulative intake is below the chart schedule.
 pub async fn run_feeding_nudge_check(pool: &SqlitePool, now_local: DateTime<Tz>) -> AppResult<()> {
     let local_date = now_local.format("%Y-%m-%d").to_string();
     let as_of = now_local.format("%Y-%m-%dT%H:%M:%S").to_string();
@@ -91,41 +92,45 @@ pub async fn run_feeding_nudge_check(pool: &SqlitePool, now_local: DateTime<Tz>)
             Err(_) => schedule.pet_id.to_string(),
         };
 
-        for window in reached {
-            let Some(from_m) = parse_hhmm(&window.from) else {
-                continue;
-            };
-            let due = schedule_due_at(&windows, from_m);
-            if actual >= due {
-                continue;
-            }
+        let (expected, _, _) = schedule_projection_at(&windows, at_minutes);
+        if actual >= expected {
+            continue;
+        }
 
-            tracing::info!(
-                pet_id = %schedule.pet_id,
+        // One reminder per check: attach it to the latest started window so
+        // earlier windows do not all fire on the same tick when far behind.
+        let Some(window) = reached
+            .iter()
+            .max_by_key(|w| parse_hhmm(&w.from).unwrap_or(-1))
+        else {
+            continue;
+        };
+
+        tracing::info!(
+            pet_id = %schedule.pet_id,
+            schedule_id = %schedule.id,
+            window = %window.from,
+            kind = kind.noun(),
+            actual,
+            expected,
+            "sending feeding reminder"
+        );
+
+        if let Err(e) = notification_service::notify_feeding_nudge(
+            pool,
+            &schedule,
+            &pet_name,
+            kind,
+            &local_date,
+            &window.from,
+        )
+        .await
+        {
+            tracing::warn!(
+                error = %e,
                 schedule_id = %schedule.id,
-                window = %window.from,
-                kind = kind.noun(),
-                actual,
-                due,
-                "sending feeding reminder"
+                "feeding_nudge: notify failed"
             );
-
-            if let Err(e) = notification_service::notify_feeding_nudge(
-                pool,
-                &schedule,
-                &pet_name,
-                kind,
-                &local_date,
-                &window.from,
-            )
-            .await
-            {
-                tracing::warn!(
-                    error = %e,
-                    schedule_id = %schedule.id,
-                    "feeding_nudge: notify failed"
-                );
-            }
         }
     }
 

@@ -358,7 +358,7 @@ fn tool_list() -> Value {
                         "pet_id": { "type": "string", "format": "uuid" },
                         "name":   { "type": "string" },
                         "active": { "type": "boolean" },
-                        "notify": { "type": "boolean", "description": "Send a feeding reminder at each window start if intake is behind." },
+                        "notify": { "type": "boolean", "description": "Send a feeding reminder when intake is behind the chart schedule." },
                         "rules":  { "type": "array" }
                     }
                 }
@@ -373,7 +373,7 @@ fn tool_list() -> Value {
                         "id":     { "type": "string" },
                         "name":   { "type": "string" },
                         "active": { "type": "boolean" },
-                        "notify": { "type": "boolean", "description": "Send a feeding reminder at each window start if intake is behind." },
+                        "notify": { "type": "boolean", "description": "Send a feeding reminder when intake is behind the chart schedule." },
                         "rules":  { "type": "array" }
                     }
                 }

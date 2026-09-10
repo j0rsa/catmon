@@ -106,8 +106,8 @@ pub fn parse_liquid_schedule_windows(rules_json: &str) -> Vec<ScheduleWindow> {
 }
 
 /// Cumulative amount due once each window's `from` time has been reached.
-/// Feeding reminders step at the window start ("time to give"), unlike the
-/// chart's midpoint projection in [`schedule_projection_at`].
+/// Feeding reminders use [`schedule_projection_at`] (midpoint stepping, same
+/// as the chart) rather than this window-start total.
 pub fn schedule_due_at(windows: &[ScheduleWindow], at_minutes: i32) -> f64 {
     let mut due = 0.0;
     for window in windows {

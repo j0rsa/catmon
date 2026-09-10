@@ -302,8 +302,8 @@ function ScheduleCard({ schedule, canWrite }: { schedule: NutritionSchedule; can
         <span className="schedule-notify-copy">
           <strong>Feeding reminder</strong>
           <span className="muted-text">
-            Notify everyone at each window start if intake is behind the scheduled amount.
-            The server checks every 10 minutes.
+            Notify everyone when intake falls behind the cumulative schedule (same curve as the fluid chart).
+            The server checks every 10 minutes; one reminder per window per day.
           </span>
         </span>
       </label>

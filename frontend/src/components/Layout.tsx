@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Calendars } from 'lucide-react';
 import { SelectedPetProvider } from '../context/SelectedPetContext';
@@ -8,10 +9,22 @@ import { BottomNav } from './BottomNav';
 import { DemoBanner } from './DemoBanner';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { useScrollToTopOnNavigate } from '../hooks/useScrollToTopOnNavigate';
+import {
+  consumePostAuthViewportSync,
+  runViewportSyncBurst,
+  syncViewportChrome,
+} from '../lib/viewportChrome';
 
 export function Layout() {
   usePushNotifications();
   useScrollToTopOnNavigate();
+  useEffect(() => {
+    if (consumePostAuthViewportSync()) {
+      runViewportSyncBurst();
+      return;
+    }
+    syncViewportChrome();
+  }, []);
   return (
     <SelectedPetProvider>
       <NotificationCenter />

@@ -6,9 +6,11 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { DisplaySettingsProvider } from './context/DisplaySettingsProvider';
 import { initPwaUpdates } from './lib/pwaUpdate';
+import { installViewportChromeSync } from './lib/viewportChrome';
 import './index.css';
 
 initPwaUpdates();
+installViewportChromeSync();
 
 if ('scrollRestoration' in history) {
   // Browser scroll restoration (especially after service-worker notification

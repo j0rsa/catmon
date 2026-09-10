@@ -132,8 +132,7 @@ pub fn feeding_windows_in_slot(
     windows: &[ScheduleWindow],
     at_minutes: i32,
 ) -> Vec<&ScheduleWindow> {
-    let slot_start =
-        (at_minutes / FEEDING_TIME_STEP_MINUTES) * FEEDING_TIME_STEP_MINUTES;
+    let slot_start = (at_minutes / FEEDING_TIME_STEP_MINUTES) * FEEDING_TIME_STEP_MINUTES;
     let slot_end = slot_start + FEEDING_TIME_STEP_MINUTES;
 
     windows

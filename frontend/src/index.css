@@ -2186,7 +2186,7 @@ pre {
   font-weight: 400;
 }
 
-.metric-card strong span {
+.metric-card strong span:not(.metric-fluid-schedule-hint) {
   font-size: 0.85rem;
   color: var(--text-muted);
   margin-left: 0.15rem;
@@ -2207,11 +2207,11 @@ pre {
   font-family: 'DM Sans', system-ui, sans-serif;
 }
 
-.metric-fluid-schedule-hint--ahead {
+.metric-card strong .metric-fluid-schedule-hint--ahead {
   color: var(--status-ok, #3d9a6a);
 }
 
-.metric-fluid-schedule-hint--behind {
+.metric-card strong .metric-fluid-schedule-hint--behind {
   color: var(--status-alert, #d94a4a);
 }
 

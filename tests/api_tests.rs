@@ -2668,7 +2668,10 @@ async fn weight_summary_weekly_aggregates_across_week() {
     assert_eq!(buckets[0]["bucket"].as_str(), Some("2026-06-15"));
     assert_eq!(buckets[0]["count"].as_i64(), Some(2));
     let avg = buckets[0]["avg_kg"].as_f64().unwrap();
-    assert!((avg - 4.3).abs() < 0.001, "week avg should be 4.3, got {avg}");
+    assert!(
+        (avg - 4.3).abs() < 0.001,
+        "week avg should be 4.3, got {avg}"
+    );
     assert_eq!(buckets[1]["bucket"].as_str(), Some("2026-06-22"));
     assert_eq!(buckets[1]["count"].as_i64(), Some(1));
 }
@@ -2712,7 +2715,10 @@ async fn weight_summary_monthly_aggregates_across_month() {
     assert_eq!(buckets[0]["bucket"].as_str(), Some("2026-06-01"));
     assert_eq!(buckets[0]["count"].as_i64(), Some(2));
     let avg = buckets[0]["avg_kg"].as_f64().unwrap();
-    assert!((avg - 4.3).abs() < 0.001, "June avg should be 4.3, got {avg}");
+    assert!(
+        (avg - 4.3).abs() < 0.001,
+        "June avg should be 4.3, got {avg}"
+    );
     assert_eq!(buckets[1]["bucket"].as_str(), Some("2026-07-01"));
     assert_eq!(buckets[1]["count"].as_i64(), Some(1));
     assert_eq!(buckets[1]["avg_kg"].as_f64(), Some(4.5));

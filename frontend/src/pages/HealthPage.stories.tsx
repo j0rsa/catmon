@@ -47,13 +47,16 @@ export const PeriodsStayReadable: Story = {
   decorators: [withHealthPage({ dense: true, longHistory: true })],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('button', { name: '30d' })).toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: '90d' }));
-    await expect(canvas.getAllByText('#Petkit').length).toBeGreaterThan(0);
-    await userEvent.click(canvas.getByRole('button', { name: '1y' }));
-    await expect(canvas.getAllByText('#Petkit').length).toBeGreaterThan(0);
-    await userEvent.click(canvas.getByRole('button', { name: 'all' }));
-    await expect(canvas.getAllByText('#Petkit').length).toBeGreaterThan(0);
+    const panel = canvas.getByRole('heading', { name: 'History' }).closest('.panel');
+    await expect(panel).toBeTruthy();
+    const weight = within(panel as HTMLElement);
+    await expect(weight.getByRole('button', { name: '30d' })).toBeInTheDocument();
+    await userEvent.click(weight.getByRole('button', { name: '90d' }));
+    await expect(weight.getAllByText('#Petkit').length).toBeGreaterThan(0);
+    await userEvent.click(weight.getByRole('button', { name: '1y' }));
+    await expect(weight.getAllByText('#Petkit').length).toBeGreaterThan(0);
+    await userEvent.click(weight.getByRole('button', { name: 'all' }));
+    await expect(weight.getAllByText('#Petkit').length).toBeGreaterThan(0);
     assertFitsNarrowViewport(canvasElement);
   },
 };

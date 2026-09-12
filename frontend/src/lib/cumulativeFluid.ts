@@ -1,3 +1,4 @@
+import { localToday } from './dates';
 import type { FluidCurvePoint, NutritionRecord, NutritionSchedule } from '../types';
 import type { CumulativeFluidChartSettings } from '../api/userSettings';
 
@@ -132,7 +133,7 @@ export function bestDayCurvesFromApi(points: FluidCurvePoint[]): Array<{ x: numb
   return result;
 }
 
-function parseLiquidScheduleWindows(rulesJson: string): ScheduleWindow[] {
+export function parseLiquidScheduleWindows(rulesJson: string): ScheduleWindow[] {
   try {
     const parsed = JSON.parse(rulesJson) as ParsedScheduleRules;
     if (parsed.type !== 'liquid') return [];
@@ -140,6 +141,60 @@ function parseLiquidScheduleWindows(rulesJson: string): ScheduleWindow[] {
   } catch {
     return [];
   }
+}
+
+function parseHhmmToMinutes(time: string): number | null {
+  const [hours, minutes] = time.split(':').map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+/** Cumulative liquid schedule expectation at a time-of-day (matches backend `schedule_projection_at`). */
+export function scheduleProjectionAt(windows: ScheduleWindow[], atMinutes: number): number {
+  const active = windows
+    .filter((w) => w.max > 0)
+    .sort((a, b) => a.from.localeCompare(b.from));
+
+  let expected = 0;
+  for (const w of active) {
+    const fromM = parseHhmmToMinutes(w.from);
+    if (fromM !== null && atMinutes >= fromM) {
+      expected += w.max;
+    }
+  }
+  return expected;
+}
+
+export function dailyScheduleMaxMl(windows: ScheduleWindow[]): number {
+  return windows.filter((w) => w.max > 0).reduce((sum, w) => sum + w.max, 0);
+}
+
+export function liquidScheduleWindowsFromSchedules(schedules: NutritionSchedule[]): ScheduleWindow[] {
+  const liquidSchedule = schedules.find((s) => s.active && s.rules_json.includes('"type":"liquid"'))
+    ?? schedules.find((s) => s.rules_json.includes('"type":"liquid"'));
+  return liquidSchedule ? parseLiquidScheduleWindows(liquidSchedule.rules_json) : [];
+}
+
+/**
+ * Expected cumulative fluid from the liquid schedule for a calendar day.
+ * Today: projection through the current minute; other days: full daily schedule total.
+ */
+export function expectedScheduledFluidMl(
+  schedules: NutritionSchedule[],
+  focusDate: string,
+  today: string = localToday(),
+): number | null {
+  const windows = liquidScheduleWindowsFromSchedules(schedules);
+  if (windows.length === 0) return null;
+
+  if (focusDate !== today) {
+    return dailyScheduleMaxMl(windows);
+  }
+
+  const now = new Date();
+  const atMinutes = now.getHours() * 60 + now.getMinutes();
+  return scheduleProjectionAt(windows, atMinutes);
 }
 
 export function buildScheduleCurve(windows: ScheduleWindow[]) {
@@ -213,9 +268,7 @@ export function buildCumulativeFluidChart(
   const dayCurve = buildStepCurve(records);
   const bestDayCurve = bestDayCurvePoints ? bestDayCurvesFromApi(bestDayCurvePoints) : [];
 
-  const liquidSchedule = schedules.find((s) => s.active && s.rules_json.includes('"type":"liquid"'))
-    ?? schedules.find((s) => s.rules_json.includes('"type":"liquid"'));
-  const scheduleWindows = liquidSchedule ? parseLiquidScheduleWindows(liquidSchedule.rules_json) : [];
+  const scheduleWindows = liquidScheduleWindowsFromSchedules(schedules);
   const scheduleCurve = buildScheduleCurve(scheduleWindows);
 
   const allX = [

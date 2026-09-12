@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, within } from 'storybook/test';
 import { mockPetId } from '../stories/fixtures';
 import { withNutritionDayPanel } from '../stories/decorators';
+import { asNarrowStory } from '../stories/viewport';
 import { NutritionDayPanel } from './NutritionDayPanel';
 
 const meta = {
@@ -25,7 +27,18 @@ export const WithRecords: Story = {
       },
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const label = canvas.getByText('Total known fluid', { selector: '.metric-label' });
+    const card = label.closest('article');
+    expect(card).toBeTruthy();
+    const cardScope = within(card!);
+    await expect(cardScope.getByText(/scheduled 99/)).toBeTruthy();
+    await expect(cardScope.getByText(/▲/)).toBeTruthy();
+  },
 };
+
+export const WithRecordsNarrow = asNarrowStory(WithRecords);
 
 export const EmptyDay: Story = {
   args: {

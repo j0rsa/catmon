@@ -2192,6 +2192,29 @@ pre {
   margin-left: 0.15rem;
 }
 
+.metric-total-fluid-value {
+  display: block;
+  line-height: 1.25;
+}
+
+.metric-fluid-schedule-hint {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  text-transform: none;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+.metric-fluid-schedule-hint--ahead {
+  color: var(--status-ok, #3d9a6a);
+}
+
+.metric-fluid-schedule-hint--behind {
+  color: var(--status-alert, #d94a4a);
+}
+
 .fluid-summary {
   font-size: 0.88rem;
   color: var(--pill-text);

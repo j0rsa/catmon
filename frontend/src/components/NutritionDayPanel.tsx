@@ -16,7 +16,9 @@ import { localToday, shiftDate } from '../lib/dates';
 import { useDisplaySettings, useFormatDate, useFormatTime } from '../context/useDisplaySettings';
 import { exportTelegramLog } from '../lib/exportTelegramLog';
 import { LiquidsIcon, WaterIcon, WetFoodIcon, TotalFluidIcon } from '../lib/metricIcons';
+import { expectedScheduledFluidMl } from '../lib/cumulativeFluid';
 import { highlightFromSummary, totalKnownFluidMl } from '../lib/nutritionMetrics';
+import { TotalKnownFluidMetric } from './TotalKnownFluidMetric';
 import { CATEGORIES, CATEGORY_LABELS } from '../types';
 import type { CreateNutritionRecord, NutritionRecord, UpdateNutritionRecord } from '../types';
 import { parseDecimal } from '../lib/numbers';
@@ -314,6 +316,10 @@ export function NutritionDayPanel({ date, petId }: NutritionDayPanelProps) {
 
   const highlight = summaryQuery.data ? highlightFromSummary(summaryQuery.data) : null;
   const totalFluid = highlight ? totalKnownFluidMl(highlight) : 0;
+  const scheduledFluid = useMemo(
+    () => expectedScheduledFluidMl(schedulesQuery.data ?? [], date),
+    [schedulesQuery.data, date],
+  );
   const fluidFromFood = highlight ? Math.round(highlight.wetFood * 0.77) : 0;
 
   if (summaryQuery.isLoading) {
@@ -360,7 +366,7 @@ export function NutritionDayPanel({ date, petId }: NutritionDayPanelProps) {
         <article className="metric-card" style={{ position: 'relative', overflow: 'hidden' }}>
           <MetricIcon color="var(--fluid-accent)"><TotalFluidIcon /></MetricIcon>
           <span className="metric-label">Total known fluid</span>
-          <strong>~{totalFluid}<span>ml</span></strong>
+          <TotalKnownFluidMetric totalFluidMl={totalFluid} scheduledMl={scheduledFluid} />
         </article>
       </div>
 

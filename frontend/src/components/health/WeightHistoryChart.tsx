@@ -58,7 +58,7 @@ export function WeightHistoryChart({ buckets, granularity, isFetching = false }:
       <ResponsiveContainer width="100%" height={220}>
         <ComposedChart data={points} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} interval="preserveStartEnd" />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} minTickGap={20} />
           <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} domain={['auto', 'auto']} />
           <Tooltip
             content={({ active, payload, label }) => {

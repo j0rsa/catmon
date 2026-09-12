@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { WeightSummaryBucket } from '../api/weight';
-import { buildWeightChart, collectWeightTags, weightSeriesKey } from './weightChart';
+import {
+  WEIGHT_CHART_PERIODS,
+  buildWeightChart,
+  collectWeightTags,
+  formatWeightBucket,
+  weightSeriesKey,
+} from './weightChart';
 
 const buckets: WeightSummaryBucket[] = [
   { bucket: '2026-06-01', tag: 'Petkit', avg_kg: 4.7, min_kg: 4.6, max_kg: 4.8, count: 6 },
@@ -34,5 +40,21 @@ describe('buildWeightChart', () => {
     expect(points[0].minKg).toBe(4.65);
     expect(points[0].maxKg).toBe(4.65);
     expect(medianKg).toBe(4.65);
+  });
+
+  it('formats monthly buckets as short month plus year', () => {
+    expect(formatWeightBucket('2026-06-01', 'monthly')).toMatch(/Jun/);
+    expect(formatWeightBucket('2026-06-01', 'monthly')).toMatch(/26/);
+  });
+});
+
+describe('WEIGHT_CHART_PERIODS', () => {
+  it('keeps each timespan on a readable bucket size', () => {
+    expect(WEIGHT_CHART_PERIODS).toEqual([
+      { label: '30d', days: 30, granularity: 'daily' },
+      { label: '90d', days: 90, granularity: 'weekly' },
+      { label: '1y', days: 365, granularity: 'monthly' },
+      { label: 'all', days: null, granularity: 'monthly' },
+    ]);
   });
 });

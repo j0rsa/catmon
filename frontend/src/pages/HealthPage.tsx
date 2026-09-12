@@ -3,7 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { weightApi } from '../api/weight';
 import { medicationsApi } from '../api/medications';
 import { parseDecimal } from '../lib/numbers';
-import type { CreateWeightRecord, WeightGranularity } from '../api/weight';
+import type { CreateWeightRecord } from '../api/weight';
 import { NoPetSelected } from '../components/NoPetSelected';
 import { HealthStatePanel } from '../components/health/HealthStatePanel';
 import { MedIntakePanel } from '../components/health/MedIntakePanel';
@@ -16,16 +16,8 @@ import { usePermissions } from '../context/usePermissions';
 import { useFormatDate, useFormatTime } from '../context/useDisplaySettings';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { hasActiveAssignmentOn } from '../lib/medications';
+import { WEIGHT_CHART_PERIODS, type WeightPeriodLabel } from '../lib/weightChart';
 import { weightNoteHasAnyTag } from '../lib/weightNote';
-
-type PeriodLabel = '30d' | '90d' | '1y' | 'all';
-
-const WEIGHT_PERIODS: { label: PeriodLabel; days: number | null; granularity: WeightGranularity }[] = [
-  { label: '30d', days: 30,  granularity: 'daily'  },
-  { label: '90d', days: 90,  granularity: 'daily'  },
-  { label: '1y',  days: 365, granularity: 'weekly' },
-  { label: 'all', days: null, granularity: 'weekly' },
-];
 
 function nowLocalDateTimeString(): string {
   const now = new Date();
@@ -40,14 +32,14 @@ export default function HealthPage() {
   const formatDate = useFormatDate();
   const formatTime = useFormatTime();
 
-  const [period, setPeriod] = useState<PeriodLabel>('30d');
+  const [period, setPeriod] = useState<WeightPeriodLabel>('30d');
   const [tagFilter, setTagFilter] = useState<{ petId: string | null; selected: string[] }>({
     petId: null,
     selected: [],
   });
   const selectedTags = tagFilter.petId === selectedPetId ? tagFilter.selected : [];
   const today = localToday();
-  const { days: periodDays, granularity } = WEIGHT_PERIODS.find((p) => p.label === period)!;
+  const { days: periodDays, granularity } = WEIGHT_CHART_PERIODS.find((p) => p.label === period)!;
   const dateFrom = periodDays != null ? shiftDate(today, -(periodDays - 1)) : undefined;
   const filterKey = [...selectedTags].sort((a, b) => a.localeCompare(b)).join(',');
 
@@ -180,7 +172,7 @@ export default function HealthPage() {
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          {WEIGHT_PERIODS.map((p) => (
+          {WEIGHT_CHART_PERIODS.map((p) => (
             <button
               key={p.label}
               type="button"

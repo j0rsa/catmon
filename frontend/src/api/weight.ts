@@ -52,7 +52,7 @@ export interface WeightStats {
   count: number;
 }
 
-export type WeightGranularity = 'raw' | 'daily' | 'weekly';
+export type WeightGranularity = 'raw' | 'daily' | 'weekly' | 'monthly';
 
 export interface WeightSummaryBucket {
   bucket: string;

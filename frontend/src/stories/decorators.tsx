@@ -35,6 +35,8 @@ import {
   mockWeightRecords,
   mockWeightSummaryDaily,
   mockWeightSummaryDenseDaily,
+  mockWeightSummaryDenseWeekly,
+  mockWeightSummaryMonthly,
   mockWeightSummaryWeekly,
   mockHealthStateRecords,
   mockDailyMedAssignments,
@@ -489,16 +491,18 @@ export function withHealthPage({ petId = mockPetId, loading = false, empty = fal
 
       const todayStr = localToday();
       const thirtyFrom = shiftDate(todayStr, -29);
-      const dailyFrom = shiftDate(todayStr, -89);
+      const ninetyFrom = shiftDate(todayStr, -89);
       const yearFrom = shiftDate(todayStr, -364);
       const summaryData = (buckets: typeof mockWeightSummaryDaily) =>
         empty ? [] : buckets.map((b) => ({ ...b }));
       const thirtyDay = dense ? mockWeightSummaryDenseDaily : mockWeightSummaryDaily;
+      const ninetyDay = dense ? mockWeightSummaryDenseWeekly : mockWeightSummaryWeekly;
+      const longSpan = longHistory || dense ? mockWeightSummaryMonthly : mockWeightSummaryWeekly;
 
       client.setQueryData(['weight-summary', thirtyFrom, todayStr, 'daily', 'tag', petId], summaryData(thirtyDay));
-      client.setQueryData(['weight-summary', dailyFrom, todayStr, 'daily', 'tag', petId], summaryData(mockWeightSummaryDaily));
-      client.setQueryData(['weight-summary', yearFrom, todayStr, 'weekly', 'tag', petId], summaryData(longHistory ? mockWeightSummaryWeekly : mockWeightSummaryDaily));
-      client.setQueryData(['weight-summary', 'all', todayStr, 'weekly', 'tag', petId], summaryData(mockWeightSummaryWeekly));
+      client.setQueryData(['weight-summary', ninetyFrom, todayStr, 'weekly', 'tag', petId], summaryData(ninetyDay));
+      client.setQueryData(['weight-summary', yearFrom, todayStr, 'monthly', 'tag', petId], summaryData(longSpan));
+      client.setQueryData(['weight-summary', 'all', todayStr, 'monthly', 'tag', petId], summaryData(longSpan));
 
       client.setQueryData(
         ['health-state-records', petId],
@@ -507,7 +511,7 @@ export function withHealthPage({ petId = mockPetId, loading = false, empty = fal
 
       const chartRecords = empty ? [] : mockHealthStateRecords.map((r) => ({ ...r, pet_id: petId }));
       client.setQueryData(['health-state-chart', petId, thirtyFrom, todayStr, 'daily'], chartRecords);
-      client.setQueryData(['health-state-chart', petId, dailyFrom, todayStr, 'daily'], chartRecords);
+      client.setQueryData(['health-state-chart', petId, ninetyFrom, todayStr, 'daily'], chartRecords);
       client.setQueryData(['health-state-chart', petId, yearFrom, todayStr, 'weekly'], chartRecords);
       client.setQueryData(['health-state-chart', petId, 'all', todayStr, 'weekly'], chartRecords);
 

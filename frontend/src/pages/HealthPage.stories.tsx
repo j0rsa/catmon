@@ -37,10 +37,28 @@ export const DenseHistory: Story = {
   },
 };
 
-/** Year of weekly-bucketed measurements — shows min/max range lines on the chart. */
+/** Year of monthly-bucketed measurements — shows min/max range lines on the chart. */
 export const LongHistory: Story = {
   decorators: [withHealthPage({ longHistory: true })],
 };
+
+/** Switching 30d / 90d / 1y / all keeps the chart on the matching bucket size. */
+export const PeriodsStayReadable: Story = {
+  decorators: [withHealthPage({ dense: true, longHistory: true })],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: '30d' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: '90d' }));
+    await expect(canvas.getAllByText('#Petkit').length).toBeGreaterThan(0);
+    await userEvent.click(canvas.getByRole('button', { name: '1y' }));
+    await expect(canvas.getAllByText('#Petkit').length).toBeGreaterThan(0);
+    await userEvent.click(canvas.getByRole('button', { name: 'all' }));
+    await expect(canvas.getAllByText('#Petkit').length).toBeGreaterThan(0);
+    assertFitsNarrowViewport(canvasElement);
+  },
+};
+
+export const PeriodsStayReadableNarrow = asNarrowStory(PeriodsStayReadable);
 
 /** No measurements recorded yet. */
 export const Empty: Story = {

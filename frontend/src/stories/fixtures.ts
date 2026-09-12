@@ -575,6 +575,33 @@ export const mockWeightSummaryWeekly: WeightSummaryBucket[] = [
   { bucket: '2024-06-10', tag: 'Petkit', avg_kg: 4.20, min_kg: 4.18, max_kg: 4.22, count: 10 },
 ];
 
+/** ~13 weekly buckets for a 90d Petkit + occasional manual history. */
+export const mockWeightSummaryDenseWeekly: WeightSummaryBucket[] = Array.from({ length: 13 }, (_, i) => {
+  const monday = new Date(Date.UTC(2024, 3, 1 + i * 7));
+  const bucket = monday.toISOString().slice(0, 10);
+  const avg = 4.22 + (i % 5) * 0.015;
+  const rows: WeightSummaryBucket[] = [
+    { bucket, tag: 'Petkit', avg_kg: avg, min_kg: avg - 0.08, max_kg: avg + 0.1, count: 28 },
+  ];
+  if (i % 3 === 0) {
+    rows.push({ bucket, tag: 'manual', avg_kg: avg - 0.03, min_kg: avg - 0.03, max_kg: avg - 0.03, count: 1 });
+  }
+  return rows;
+}).flat();
+
+/** Year of monthly averages for 1y / all-time. */
+export const mockWeightSummaryMonthly: WeightSummaryBucket[] = Array.from({ length: 12 }, (_, i) => {
+  const bucket = `2024-${String(i + 1).padStart(2, '0')}-01`;
+  const avg = 4.35 - i * 0.012;
+  const rows: WeightSummaryBucket[] = [
+    { bucket, tag: 'Petkit', avg_kg: avg, min_kg: avg - 0.1, max_kg: avg + 0.08, count: 80 },
+  ];
+  if (i % 2 === 0) {
+    rows.push({ bucket, tag: 'manual', avg_kg: avg - 0.04, min_kg: avg - 0.05, max_kg: avg - 0.02, count: 2 });
+  }
+  return rows;
+}).flat();
+
 /** 30 daily buckets with ~6 Petkit readings/day plus occasional manual — matches dense scale data. */
 export const mockWeightSummaryDenseDaily: WeightSummaryBucket[] = Array.from({ length: 30 }, (_, i) => {
   const day = 15 - i;

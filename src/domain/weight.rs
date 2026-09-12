@@ -71,6 +71,7 @@ pub enum WeightGranularity {
     #[default]
     Daily,
     Weekly,
+    Monthly,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -234,6 +235,7 @@ pub fn summarize_by_tag(
             WeightGranularity::Raw => record.measured_at.clone(),
             WeightGranularity::Daily => record.local_date.clone(),
             WeightGranularity::Weekly => monday_week_start(&record.local_date),
+            WeightGranularity::Monthly => month_start(&record.local_date),
         };
         let tag = primary_tag(record.note.as_deref());
         let key = (bucket, tag.to_ascii_lowercase());
@@ -272,6 +274,15 @@ fn monday_week_start(local_date: &str) -> String {
         .unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).expect("epoch"));
     let offset = date.weekday().num_days_from_monday();
     (date - Duration::days(offset as i64))
+        .format("%Y-%m-%d")
+        .to_string()
+}
+
+fn month_start(local_date: &str) -> String {
+    let date = NaiveDate::parse_from_str(local_date, "%Y-%m-%d")
+        .unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).expect("epoch"));
+    NaiveDate::from_ymd_opt(date.year(), date.month(), 1)
+        .expect("valid month start")
         .format("%Y-%m-%d")
         .to_string()
 }
@@ -465,5 +476,50 @@ mod tests {
         assert_eq!(petkit.max_kg, 4.4);
         assert_eq!(manual.count, 1);
         assert_eq!(manual.avg_kg, 4.3);
+    }
+
+    #[test]
+    fn summarize_by_tag_groups_monthly_buckets() {
+        let pet_id = Uuid::nil();
+        let records = vec![
+            WeightRecord {
+                id: "1".into(),
+                pet_id,
+                measured_at: "2026-06-02T09:00:00".into(),
+                local_date: "2026-06-02".into(),
+                weight_kg: 4.2,
+                note: Some("#Petkit morning".into()),
+                source_type: "manual".into(),
+                created_at: "".into(),
+            },
+            WeightRecord {
+                id: "2".into(),
+                pet_id,
+                measured_at: "2026-06-28T18:00:00".into(),
+                local_date: "2026-06-28".into(),
+                weight_kg: 4.4,
+                note: Some("#Petkit evening".into()),
+                source_type: "manual".into(),
+                created_at: "".into(),
+            },
+            WeightRecord {
+                id: "3".into(),
+                pet_id,
+                measured_at: "2026-07-03T12:00:00".into(),
+                local_date: "2026-07-03".into(),
+                weight_kg: 4.5,
+                note: Some("#Petkit".into()),
+                source_type: "manual".into(),
+                created_at: "".into(),
+            },
+        ];
+        let buckets = summarize_by_tag(&records, &WeightGranularity::Monthly);
+        assert_eq!(buckets.len(), 2);
+        let june = buckets.iter().find(|b| b.bucket == "2026-06-01").unwrap();
+        let july = buckets.iter().find(|b| b.bucket == "2026-07-01").unwrap();
+        assert_eq!(june.count, 2);
+        assert!((june.avg_kg - 4.3).abs() < 1e-9);
+        assert_eq!(july.count, 1);
+        assert_eq!(july.avg_kg, 4.5);
     }
 }

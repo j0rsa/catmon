@@ -555,7 +555,7 @@ fn tool_list() -> Value {
             },
             {
                 "name": "weight.summary",
-                "description": "Get aggregated weight history bucketed by granularity. Use daily for ≤90d (including 30d), weekly for longer periods. Pass group_by=tag to split series by the first hashtag in each note (#manual if none). Returns avg/min/max per bucket for chart rendering.",
+                "description": "Get aggregated weight history bucketed by granularity. Use daily for 30d, weekly for 90d, monthly for 1y and all-time. Pass group_by=tag to split series by the first hashtag in each note (#manual if none). Returns avg/min/max per bucket for chart rendering.",
                 "inputSchema": {
                     "type": "object",
                     "required": ["pet_id", "date_to"],
@@ -563,7 +563,7 @@ fn tool_list() -> Value {
                         "pet_id":      { "type": "string", "format": "uuid" },
                         "date_from":   { "type": "string", "format": "date" },
                         "date_to":     { "type": "string", "format": "date" },
-                        "granularity": { "type": "string", "enum": ["raw", "daily", "weekly"], "default": "daily" },
+                        "granularity": { "type": "string", "enum": ["raw", "daily", "weekly", "monthly"], "default": "daily" },
                         "group_by":    { "type": "string", "enum": ["none", "tag"], "default": "none" }
                     }
                 }

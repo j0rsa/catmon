@@ -2630,6 +2630,95 @@ async fn weight_summary_daily_aggregates_multiple_records_per_day() {
 }
 
 #[actix_web::test]
+async fn weight_summary_weekly_aggregates_across_week() {
+    let (app, _state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "SummaryWeeklyTest");
+
+    for (date, kg) in [
+        ("2026-06-15", 4.2_f64),
+        ("2026-06-18", 4.4_f64),
+        ("2026-06-22", 4.6_f64),
+    ] {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/health/weight")
+            .set_json(serde_json::json!({
+                "pet_id": pet_id,
+                "measured_at": format!("{date}T09:00:00"),
+                "weight_kg": kg,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+    }
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/v1/health/weight/summary?pet_id={pet_id}&date_from=2026-06-15&date_to=2026-06-22&granularity=weekly"
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    let buckets = body.as_array().expect("expected array");
+    assert_eq!(
+        buckets.len(),
+        2,
+        "weekly granularity must produce one bucket per Monday-aligned week"
+    );
+    assert_eq!(buckets[0]["bucket"].as_str(), Some("2026-06-15"));
+    assert_eq!(buckets[0]["count"].as_i64(), Some(2));
+    let avg = buckets[0]["avg_kg"].as_f64().unwrap();
+    assert!((avg - 4.3).abs() < 0.001, "week avg should be 4.3, got {avg}");
+    assert_eq!(buckets[1]["bucket"].as_str(), Some("2026-06-22"));
+    assert_eq!(buckets[1]["count"].as_i64(), Some(1));
+}
+
+#[actix_web::test]
+async fn weight_summary_monthly_aggregates_across_month() {
+    let (app, _state) = build_dev_app!();
+    let pet_id = api_create_pet!(&app, "SummaryMonthlyTest");
+
+    for (date, kg) in [
+        ("2026-06-02", 4.2_f64),
+        ("2026-06-28", 4.4_f64),
+        ("2026-07-03", 4.5_f64),
+    ] {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/health/weight")
+            .set_json(serde_json::json!({
+                "pet_id": pet_id,
+                "measured_at": format!("{date}T09:00:00"),
+                "weight_kg": kg,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+    }
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/api/v1/health/weight/summary?pet_id={pet_id}&date_from=2026-06-01&date_to=2026-07-31&granularity=monthly"
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    let buckets = body.as_array().expect("expected array");
+    assert_eq!(
+        buckets.len(),
+        2,
+        "monthly granularity must produce one bucket per calendar month"
+    );
+    assert_eq!(buckets[0]["bucket"].as_str(), Some("2026-06-01"));
+    assert_eq!(buckets[0]["count"].as_i64(), Some(2));
+    let avg = buckets[0]["avg_kg"].as_f64().unwrap();
+    assert!((avg - 4.3).abs() < 0.001, "June avg should be 4.3, got {avg}");
+    assert_eq!(buckets[1]["bucket"].as_str(), Some("2026-07-01"));
+    assert_eq!(buckets[1]["count"].as_i64(), Some(1));
+    assert_eq!(buckets[1]["avg_kg"].as_f64(), Some(4.5));
+}
+
+#[actix_web::test]
 async fn weight_summary_raw_returns_one_bucket_per_record() {
     let (app, _state) = build_dev_app!();
     let pet_id = api_create_pet!(&app, "SummaryRawTest");

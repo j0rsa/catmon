@@ -267,6 +267,11 @@ pub async fn summary(
              CAST(NULL AS TEXT) AS tag, AVG(weight_kg) AS avg_kg, MIN(weight_kg) AS min_kg, MAX(weight_kg) AS max_kg, CAST(COUNT(*) AS INTEGER) AS count \
              FROM weight_records WHERE {conditions} GROUP BY 1 ORDER BY 1 ASC"
         ),
+        WeightGranularity::Monthly => format!(
+            "SELECT date(local_date, 'start of month') AS bucket, \
+             CAST(NULL AS TEXT) AS tag, AVG(weight_kg) AS avg_kg, MIN(weight_kg) AS min_kg, MAX(weight_kg) AS max_kg, CAST(COUNT(*) AS INTEGER) AS count \
+             FROM weight_records WHERE {conditions} GROUP BY 1 ORDER BY 1 ASC"
+        ),
     };
 
     let mut q =

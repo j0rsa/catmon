@@ -1,6 +1,19 @@
 import type { WeightGranularity, WeightSummaryBucket } from '../api/weight';
 import { linReg } from './linReg';
 
+export type WeightPeriodLabel = '30d' | '90d' | '1y' | 'all';
+
+export const WEIGHT_CHART_PERIODS: {
+  label: WeightPeriodLabel;
+  days: number | null;
+  granularity: WeightGranularity;
+}[] = [
+  { label: '30d', days: 30, granularity: 'daily' },
+  { label: '90d', days: 90, granularity: 'weekly' },
+  { label: '1y', days: 365, granularity: 'monthly' },
+  { label: 'all', days: null, granularity: 'monthly' },
+];
+
 export const WEIGHT_TAG_COLORS = [
   'var(--accent)',
   '#5b8def',
@@ -54,6 +67,9 @@ export function formatWeightBucket(bucket: string, granularity: WeightGranularit
     return `${dt.getDate()} ${dt.toLocaleString('en', { month: 'short' })} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
   }
   const dt = new Date(`${bucket}T00:00:00`);
+  if (granularity === 'monthly') {
+    return dt.toLocaleString('en', { month: 'short', year: '2-digit' });
+  }
   return `${dt.getDate()} ${dt.toLocaleString('en', { month: 'short' })}`;
 }
 

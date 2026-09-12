@@ -1371,8 +1371,9 @@ paths:
       description: |
         Returns weight records bucketed by granularity. Use this for charts with large datasets.
         - `raw`: one bucket per individual measurement (for very short windows)
-        - `daily`: one bucket per calendar day with avg/min/max (for ≤90d, including 30d)
-        - `weekly`: one bucket per week (Monday-aligned) with avg/min/max (for long windows)
+        - `daily`: one bucket per calendar day with avg/min/max (for 30d)
+        - `weekly`: one bucket per week (Monday-aligned) with avg/min/max (for 90d)
+        - `monthly`: one bucket per calendar month with avg/min/max (for 1y and all-time)
         Pass `group_by=tag` to emit one series per first hashtag in the note (`manual` when none).
       parameters:
         - name: pet_id
@@ -1390,7 +1391,7 @@ paths:
         - name: granularity
           in: query
           required: false
-          schema: { type: string, enum: [raw, daily, weekly], default: daily }
+          schema: { type: string, enum: [raw, daily, weekly, monthly], default: daily }
         - name: group_by
           in: query
           required: false
@@ -4925,7 +4926,7 @@ components:
       properties:
         bucket:
           type: string
-          description: Bucket identifier — ISO datetime for raw, YYYY-MM-DD for daily/weekly
+          description: Bucket identifier — ISO datetime for raw, YYYY-MM-DD for daily/weekly/monthly
         tag:
           type: string
           nullable: true
